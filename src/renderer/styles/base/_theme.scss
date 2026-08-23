@@ -1,0 +1,18 @@
+@use '../abstracts' as a;
+
+////
+/// Token màu khai báo ở 3 scope:
+///   :root                                     -> light (mặc định)
+///   @media dark + :not([data-theme='light'])  -> theo hệ điều hành
+///   :root[data-theme='dark']                  -> theo toggle, thắng cả 2 chiều
+/// Thiếu scope 3 thì toggle không bật được dark khi OS đang light; thiếu
+/// scope 2 thì mặc định "theo hệ thống" không hoạt động.
+////
+
+:root { @include a.color-tokens(light); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { @include a.color-tokens(dark); }
+}
+
+:root[data-theme='dark'] { @include a.color-tokens(dark); }

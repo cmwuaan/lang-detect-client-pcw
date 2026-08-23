@@ -1,0 +1,18 @@
+@use '../abstracts' as a;
+
+.card {
+  @include a.card-surface;
+  padding: a.space(5);
+  display: flex;
+  flex-direction: column;
+  gap: a.space(4);
+}
+
+.card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: a.space(3);
+}
+
+.card__title { @include a.eyebrow; }

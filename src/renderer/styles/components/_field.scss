@@ -1,0 +1,45 @@
+@use '../abstracts' as a;
+
+.field { display: flex; flex-direction: column; gap: a.space(2); }
+.field__label { @include a.eyebrow; }
+.field__hint { @include a.tabular; color: var(--ink-muted); font-size: a.font-size(sm); }
+
+.textarea {
+  @include a.focus-ring;
+  width: 100%;
+  min-height: 128px;
+  padding: a.space(3);
+  resize: vertical;
+  background: var(--plane);
+  color: var(--ink);
+  border: 1px solid var(--baseline);
+  border-radius: a.radius(md);
+  line-height: 1.55;
+
+  &::placeholder { color: var(--ink-muted); }
+  &:hover { border-color: var(--ink-muted); }
+}
+
+/// Hàng label: nhãn bên trái, kết quả nhận diện bên phải.
+.field__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: a.space(3);
+}
+
+/// Kết quả hiện cạnh label. min-width giữ chỗ cố định để lúc đổi giữa "…" và
+/// tên ngôn ngữ, nhãn bên trái không bị đẩy.
+.field__result {
+  min-width: 88px;
+  text-align: right;
+  font-size: a.font-size(md);
+  font-weight: a.weight(semibold);
+  color: var(--accent);
+  white-space: nowrap;
+
+  &[aria-busy='true'] {
+    color: var(--ink-muted);
+    font-weight: a.weight(regular);
+  }
+}

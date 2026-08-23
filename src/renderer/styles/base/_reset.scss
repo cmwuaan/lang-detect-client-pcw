@@ -1,0 +1,32 @@
+@use '../abstracts' as a;
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  // Nền phải khai báo tường minh: cửa sổ Electron và trang web đều tự vẽ nền
+  // riêng, body trong suốt sẽ ăn màu của host.
+  background: var(--plane);
+  color: var(--ink);
+  font-family: a.$font-sans;
+  font-size: a.font-size(md);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, textarea, select { font: inherit; color: inherit; }
+
+// Electron: chặn kéo-thả làm cửa sổ điều hướng mất trang.
+img, a { -webkit-user-drag: none; }
+
+h1, h2 { margin: 0; line-height: 1.25; font-weight: a.weight(semibold); }
+h1 { font-size: a.font-size(2xl); letter-spacing: -0.015em; }
+h2 { font-size: a.font-size(lg); }
+p { margin: 0; }
+code { font-family: a.$font-mono; font-size: 0.92em; }
+
+.u-visually-hidden { @include a.visually-hidden; }
+.u-row { display: flex; flex-wrap: wrap; align-items: center; gap: a.space(2); }

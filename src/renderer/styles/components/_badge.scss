@@ -1,0 +1,24 @@
+@use '../abstracts' as a;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: a.space(2);
+  padding: a.space(1) a.space(3);
+  border: 1px solid var(--hairline);
+  border-radius: a.radius(pill);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: a.font-size(sm);
+  white-space: nowrap;
+}
+
+/// Nhận dạng bằng mark có màu ĐẶT CẠNH chữ, không tô màu chữ.
+.badge__dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+  flex: none;
+}
+
+.badge--desktop .badge__dot { background: var(--accent); }

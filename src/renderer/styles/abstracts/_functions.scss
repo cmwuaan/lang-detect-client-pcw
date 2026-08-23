@@ -1,0 +1,32 @@
+@use 'sass:map';
+@use 'variables' as v;
+
+/// Accessor cho scale — sai key là lỗi build có thông báo rõ, không âm thầm null.
+
+@function space($key) {
+  @if not map.has-key(v.$space, $key) {
+    @error 'space(): không có key `#{$key}`. Có: #{map.keys(v.$space)}.';
+  }
+  @return map.get(v.$space, $key);
+}
+
+@function radius($key) {
+  @if not map.has-key(v.$radius, $key) {
+    @error 'radius(): không có key `#{$key}`. Có: #{map.keys(v.$radius)}.';
+  }
+  @return map.get(v.$radius, $key);
+}
+
+@function font-size($key) {
+  @if not map.has-key(v.$font-size, $key) {
+    @error 'font-size(): không có key `#{$key}`. Có: #{map.keys(v.$font-size)}.';
+  }
+  @return map.get(v.$font-size, $key);
+}
+
+@function weight($key) {
+  @if not map.has-key(v.$weight, $key) {
+    @error 'weight(): không có key `#{$key}`. Có: #{map.keys(v.$weight)}.';
+  }
+  @return map.get(v.$weight, $key);
+}

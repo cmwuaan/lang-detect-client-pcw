@@ -1,0 +1,12 @@
+// Entry duy nhất của stylesheet. Thêm partial nào thì khai báo ở đây.
+// scripts/build.js biên dịch file này -> dist/renderer/styles.css
+
+@use 'base/theme';
+@use 'base/reset';
+
+@use 'components/shell';
+@use 'components/card';
+@use 'components/button';
+@use 'components/field';
+@use 'components/badge';
+@use 'components/kv';

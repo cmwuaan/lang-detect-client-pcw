@@ -1,0 +1,4 @@
+// Điểm vào tầng abstracts: file khác chỉ cần `@use '../abstracts' as a;`.
+@forward 'variables';
+@forward 'functions';
+@forward 'mixins';

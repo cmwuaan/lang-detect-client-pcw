@@ -1,0 +1,44 @@
+@use '../abstracts' as a;
+
+.button {
+  @include a.focus-ring;
+  display: inline-flex;
+  align-items: center;
+  gap: a.space(2);
+  padding: a.space(2) a.space(4);
+  border: 1px solid transparent;
+  border-radius: a.radius(md);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: a.weight(medium);
+  cursor: pointer;
+
+  @include a.motion-safe { transition: background 120ms ease; }
+  &:hover { background: var(--accent-hover); }
+}
+
+.button--ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--hairline);
+
+  &:hover { background: var(--plane); color: var(--ink); }
+}
+
+.button--chip {
+  padding: a.space(1) a.space(3);
+  border-radius: a.radius(pill);
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--hairline);
+  font-size: a.font-size(sm);
+  font-weight: a.weight(regular);
+
+  &:hover { background: var(--plane); color: var(--ink); border-color: var(--baseline); }
+}
+
+.button--chip.is-active {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--ink);
+}

@@ -1,0 +1,45 @@
+////
+/// Design token — nguồn duy nhất. Đây là chỗ duy nhất viết hex;
+/// base/_theme.scss chiếu chúng thành CSS custom properties, component chỉ
+/// dùng var(--*) nên đổi theme chỉ sửa một chỗ.
+////
+
+// --- palette: ramp một hue cho encoding magnitude (độ tin cậy) ---
+$blue-100: #cde2fb;
+$blue-250: #86b6ef;
+$blue-400: #3987e5;
+$blue-450: #2a78d6;
+$blue-550: #1c5cab;
+$blue-700: #0d366b;
+
+// --- chrome & ink ---
+$surface-light: #fcfcfb;
+$plane-light: #f4f4f2;
+$ink-light: #0b0b0b;
+$ink-2-light: #52514e;
+$hairline-light: #e1e0d9;
+$baseline-light: #c3c2b7;
+
+$surface-dark: #1a1a19;
+$plane-dark: #111112;
+$ink-dark: #ffffff;
+$ink-2-dark: #c3c2b7;
+$hairline-dark: #2c2c2a;
+$baseline-dark: #383835;
+
+/// Muted (nhãn phụ) giữ nguyên ở cả 2 mode.
+$ink-muted: #898781;
+
+// --- scales ---
+$space: (0: 0, 1: 4px, 2: 8px, 3: 12px, 4: 16px, 5: 24px, 6: 32px, 7: 48px);
+$radius: (sm: 4px, md: 8px, lg: 12px, pill: 999px);
+$font-size: (xs: 11px, sm: 12px, md: 14px, lg: 16px, xl: 20px, 2xl: 26px, hero: 48px);
+$weight: (regular: 400, medium: 500, semibold: 600);
+
+$font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+$font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+/// Độ mờ của lớp nền nhạt lấy từ accent (chip đang chọn…).
+$accent-wash-alpha: 0.14;
+
+$layout-max-width: 760px;

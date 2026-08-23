@@ -1,0 +1,28 @@
+@use '../abstracts' as a;
+
+/// Table view — đọc được toàn bộ số mà không cần phân biệt màu hay hover.
+.table { width: 100%; border-collapse: collapse; font-size: a.font-size(sm); }
+
+.table th, .table td {
+  text-align: left;
+  padding: a.space(2) a.space(3);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.table th { @include a.eyebrow; border-bottom-color: var(--baseline); white-space: nowrap; }
+.table td { color: var(--ink-2); }
+
+/// Cột số thẳng hàng dọc -> đây mới là chỗ dùng tabular-nums.
+.table__num { @include a.tabular; text-align: right; }
+.table tr:last-child td { border-bottom: none; }
+
+.kv {
+  display: grid;
+  grid-template-columns: minmax(0, 128px) 1fr;
+  gap: a.space(2) a.space(4);
+  margin: 0;
+  font-size: a.font-size(sm);
+}
+
+.kv dt { color: var(--ink-muted); }
+.kv dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }

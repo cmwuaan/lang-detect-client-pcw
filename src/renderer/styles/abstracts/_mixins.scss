@@ -1,0 +1,83 @@
+@use 'sass:color';
+@use 'functions' as fn;
+@use 'variables' as v;
+
+/// Chiếu token màu thành CSS custom properties.
+/// Dark mode là bộ step ĐƯỢC CHỌN từ cùng ramp, không phải đảo tự động.
+@mixin color-tokens($mode) {
+  @if $mode == light {
+    color-scheme: light;
+    --surface: #{v.$surface-light};
+    --plane: #{v.$plane-light};
+    --ink: #{v.$ink-light};
+    --ink-2: #{v.$ink-2-light};
+    --ink-muted: #{v.$ink-muted};
+    --hairline: #{v.$hairline-light};
+    --baseline: #{v.$baseline-light};
+
+    --accent-wash: #{color.change(v.$blue-450, $alpha: v.$accent-wash-alpha)};
+
+    --accent: #{v.$blue-450};
+    --accent-hover: #{v.$blue-550};
+    --accent-ink: #{v.$surface-light};
+    --focus: #{v.$blue-450};
+  } @else {
+    color-scheme: dark;
+    --surface: #{v.$surface-dark};
+    --plane: #{v.$plane-dark};
+    --ink: #{v.$ink-dark};
+    --ink-2: #{v.$ink-2-dark};
+    --ink-muted: #{v.$ink-muted};
+    --hairline: #{v.$hairline-dark};
+    --baseline: #{v.$baseline-dark};
+
+    --accent-wash: #{color.change(v.$blue-400, $alpha: v.$accent-wash-alpha)};
+
+    --accent: #{v.$blue-400};
+    --accent-hover: #{v.$blue-250};
+    --accent-ink: #{v.$blue-700};
+    --focus: #{v.$blue-250};
+  }
+}
+
+/// Focus ring chỉ hiện khi điều hướng bằng bàn phím.
+@mixin focus-ring($offset: 2px) {
+  &:focus { outline: none; }
+  &:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: $offset;
+  }
+}
+
+@mixin visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/// Nhãn nhỏ in hoa giãn chữ — heading của card/section/table.
+@mixin eyebrow {
+  font-size: fn.font-size(xs);
+  font-weight: fn.weight(semibold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/// CHỈ dùng cho cột số cần thẳng hàng dọc. Số lớn đứng một mình (hero) phải
+/// để figure proportional, tabular làm nó trông rời rạc.
+@mixin tabular { font-variant-numeric: tabular-nums; }
+
+@mixin card-surface {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: fn.radius(lg);
+}
+
+@mixin motion-safe {
+  @media (prefers-reduced-motion: no-preference) { @content; }
+}
