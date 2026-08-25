@@ -12,7 +12,6 @@ import { TOKENS } from './services/tokens';
 
 configureContainer();
 
-// UI chỉ nhận interface; container quyết định lớp cụ thể nào được dùng.
 const providers = container.resolveAll<LanguageDetectorProvider>(TOKENS.LanguageDetectorProvider);
 const platform = container.resolve<IPlatformService>(TOKENS.PlatformService);
 

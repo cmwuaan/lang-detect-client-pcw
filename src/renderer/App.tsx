@@ -2,196 +2,205 @@ import * as React from 'react';
 
 import { MethodPicker } from './components/MethodPicker';
 import { SampleChips } from './components/SampleChips';
-import { ThemeToggle } from './components/ThemeToggle';
 import { languageName } from './lib/languageName';
 import { SAMPLES } from './lib/samples';
 import { useDebouncedValue } from './lib/useDebouncedValue';
+import { useLanguageDetector } from './lib/useLanguageDetector';
 import {
-  AvailabilityStatus,
-  LanguageDetectionResult,
-  LanguageDetector,
-  LanguageDetectorProvider,
+	LanguageDetectionResult,
+	LanguageDetectorProvider,
+	UNDETERMINED_LANGUAGE,
 } from './services/detection/LanguageDetector';
 import { IPlatformService, PlatformInfo } from './services/platform/IPlatformService';
 
-/** Đủ ngắn để còn cảm giác tức thời, đủ dài để kết quả không nhấp nháy từng phím. */
 const DETECT_DEBOUNCE_MS = 200;
 
 export interface AppProps {
-  /** Mọi implementation đăng ký dưới token LanguageDetectorProvider. */
-  providers: LanguageDetectorProvider[];
-  platform: IPlatformService;
+	providers: LanguageDetectorProvider[];
+	platform: IPlatformService;
 }
 
 export function App(props: AppProps): JSX.Element {
-  const providers = props.providers;
-  const platform = props.platform;
+	const providers = props.providers;
+	const platform = props.platform;
 
-  const [text, setText] = React.useState<string>(SAMPLES[0].text);
-  const [providerId, setProviderId] = React.useState<string>(providers[0].id);
-  const [info, setInfo] = React.useState<PlatformInfo | null>(null);
+	const [text, setText] = React.useState<string>(SAMPLES[0].text);
+	const [providerId, setProviderId] = React.useState<string>(providers[0].id);
+	const [info, setInfo] = React.useState<PlatformInfo | null>(null);
+	const [results, setResults] = React.useState<LanguageDetectionResult[] | null>(null);
 
-  const [detector, setDetector] = React.useState<LanguageDetector | null>(null);
-  const [availability, setAvailability] = React.useState<AvailabilityStatus | null>(null);
-  const [results, setResults] = React.useState<LanguageDetectionResult[] | null>(null);
+	React.useEffect(
+		function () {
+			let alive = true;
+			void platform.getInfo().then(function (next) {
+				if (alive) setInfo(next);
+			});
+			return function () {
+				alive = false;
+			};
+		},
+		[platform]
+	);
 
-  React.useEffect(function () {
-    let alive = true;
-    void platform.getInfo().then(function (next) {
-      if (alive) setInfo(next);
-    });
-    return function () {
-      alive = false;
-    };
-  }, [platform]);
+	const provider = React.useMemo(
+		function () {
+			const found = providers.filter(function (p) {
+				return p.id === providerId;
+			})[0];
+			return found || providers[0];
+		},
+		[providers, providerId]
+	);
 
-  const provider = React.useMemo(function () {
-    const found = providers.filter(function (p) {
-      return p.id === providerId;
-    })[0];
-    return found || providers[0];
-  }, [providers, providerId]);
+	// Hook lo vòng đời session: availability, transient activation, tiến độ tải.
+	const state = useLanguageDetector(provider);
+	const detector = state.detector;
 
-  // Mỗi provider tạo ra một session; đổi provider thì session cũ phải destroy().
-  React.useEffect(function () {
-    let alive = true;
-    let session: LanguageDetector | null = null;
+	// Đổi provider -> kết quả cũ không còn ý nghĩa.
+	React.useEffect(
+		function () {
+			setResults(null);
+		},
+		[detector]
+	);
 
-    setDetector(null);
-    setResults(null);
-    setAvailability(null);
+	// Chỉ văn bản bị debounce; đổi provider thì chạy lại ngay.
+	const detectText = useDebouncedValue(text, DETECT_DEBOUNCE_MS);
 
-    void provider.availability().then(function (status) {
-      if (alive) setAvailability(status);
-    });
+	React.useEffect(
+		function () {
+			let alive = true;
+			if (detector) {
+				detector.detect(detectText).then(
+					function (next) {
+						if (alive) setResults(next);
+					},
+					function () {
+						if (alive) setResults([]);
+					}
+				);
+			}
+			return function () {
+				alive = false;
+			};
+		},
+		[detector, detectText]
+	);
 
-    provider.create().then(
-      function (created) {
-        if (!alive) {
-          created.destroy();
-          return;
-        }
-        session = created;
-        setDetector(created);
-      },
-      function () {
-        // create() thất bại (ví dụ trình duyệt không có Web API) -> để null,
-        // availability() ở trên đã nói rõ lý do.
-        if (alive) setDetector(null);
-      }
-    );
+	// detect() trả mảng đã sắp giảm dần theo confidence, phần tử cuối luôn là 'und'.
+	const best = results && results.length > 0 ? results[0] : null;
+	const isUndetermined = best !== null && best.detectedLanguage === UNDETERMINED_LANGUAGE;
+	const isBusy = detector !== null && (detectText !== text || results === null);
 
-    return function () {
-      alive = false;
-      if (session) session.destroy();
-    };
-  }, [provider]);
+	let display: string;
+	if (!detector) display = '—';
+	else if (isBusy) display = '…';
+	else if (!best) display = '—';
+	else if (isUndetermined) display = 'Không xác định';
+	else display = languageName(best.detectedLanguage);
 
-  // Chỉ văn bản bị debounce; đổi provider thì chạy lại ngay.
-  const detectText = useDebouncedValue(text, DETECT_DEBOUNCE_MS);
+	return (
+		<main className="shell">
+			<header className="shell__header">
+				<div>
+					<h1>Lang Detect</h1>
+					<p className="shell__tagline">
+						Nhận diện ngôn ngữ ngoại tuyến — cùng một bundle chạy cả web và desktop
+					</p>
+				</div>
+				<div className="u-row">
+					<span className={'badge' + (platform.isDesktop ? ' badge--desktop' : '')}>
+						<span className="badge__dot" aria-hidden="true" />
+						{info ? info.label : '…'}
+					</span>
+				</div>
+			</header>
 
-  React.useEffect(function () {
-    let alive = true;
-    if (detector) {
-      detector.detect(detectText).then(
-        function (next) {
-          if (alive) setResults(next);
-        },
-        function () {
-          if (alive) setResults([]);
-        }
-      );
-    }
-    return function () {
-      alive = false;
-    };
-  }, [detector, detectText]);
+			<section className="card">
+				<div className="field">
+					<div className="field__header">
+						<label className="field__label" htmlFor="input-text">
+							Văn bản cần nhận diện
+						</label>
+						{/* Kết quả nằm ngay cạnh label. aria-live vì nó tự đổi khi gõ. */}
+						<span
+							className="field__result"
+							aria-live="polite"
+							aria-atomic="true"
+							aria-busy={isBusy}
+							title={
+								best && !isUndetermined
+									? 'Độ tin cậy ' + Math.round(best.confidence * 100) + '%'
+									: undefined
+							}
+						>
+							{display}
+						</span>
+					</div>
+					<textarea
+						id="input-text"
+						className="textarea"
+						value={text}
+						spellCheck={false}
+						placeholder="Dán hoặc gõ văn bản vào đây…"
+						onChange={function (event) {
+							setText(event.target.value);
+						}}
+					/>
+					<span className="field__hint">{text.length} ký tự</span>
+				</div>
+				<SampleChips onPick={setText} />
+			</section>
 
-  // Đang chờ: còn gõ, chưa có session, hoặc detect() chưa trả về.
-  const isPending = detectText !== text || !detector || results === null;
-  const top = results && results.length > 0 ? results[0] : null;
+			<section className="card">
+				<MethodPicker
+					providers={providers}
+					activeId={provider.id}
+					availability={state.availability}
+					onPick={setProviderId}
+				/>
 
-  return (
-    <main className="shell">
-      <header className="shell__header">
-        <div>
-          <h1>Lang Detect</h1>
-          <p className="shell__tagline">
-            Nhận diện ngôn ngữ ngoại tuyến — cùng một bundle chạy cả web và desktop
-          </p>
-        </div>
-        <div className="u-row">
-          <ThemeToggle />
-          <span className={'badge' + (platform.isDesktop ? ' badge--desktop' : '')}>
-            <span className="badge__dot" aria-hidden="true" />
-            {info ? info.label : '…'}
-          </span>
-        </div>
-      </header>
+				{/* Spec đòi transient activation: model chỉ được tải từ trong một
+				    sự kiện do người dùng kích hoạt, không tự tải lúc mount. */}
+				{state.needsUserGesture ? (
+					<div className="u-row">
+						<button type="button" className="button" onClick={state.requestCreate}>
+							Tải model ngôn ngữ
+						</button>
+						<span className="field__hint">
+							Trình duyệt yêu cầu thao tác của người dùng trước khi tải model.
+						</span>
+					</div>
+				) : null}
 
-      <section className="card">
-        <div className="field">
-          <div className="field__header">
-            <label className="field__label" htmlFor="input-text">
-              Văn bản cần nhận diện
-            </label>
-            {/* Kết quả nằm ngay cạnh label. aria-live vì nó tự đổi khi gõ. */}
-            <span
-              className="field__result"
-              aria-live="polite"
-              aria-atomic="true"
-              aria-busy={isPending}
-              title={top ? 'Độ tin cậy ' + Math.round(top.confidence * 100) + '%' : undefined}
-            >
-              {isPending ? '…' : top ? languageName(top.detectedLanguage) : '—'}
-            </span>
-          </div>
-          <textarea
-            id="input-text"
-            className="textarea"
-            value={text}
-            spellCheck={false}
-            placeholder="Dán hoặc gõ văn bản vào đây…"
-            onChange={function (event) {
-              setText(event.target.value);
-            }}
-          />
-          <span className="field__hint">{text.length} ký tự</span>
-        </div>
-        <SampleChips onPick={setText} />
-      </section>
+				{state.progress !== null ? (
+					<span className="field__hint">Đang tải model… {Math.round(state.progress * 100)}%</span>
+				) : null}
 
-      <section className="card">
-        <MethodPicker
-          providers={providers}
-          activeId={provider.id}
-          availability={availability}
-          onPick={setProviderId}
-        />
-      </section>
+				{state.error ? <p className="field__hint">{state.error}</p> : null}
+			</section>
 
-      <section className="card">
-        <h2 className="card__title">Môi trường thực thi</h2>
-        {info ? (
-          <dl className="kv">
-            {info.details.map(function (row) {
-              return (
-                <React.Fragment key={row.name}>
-                  <dt>{row.name}</dt>
-                  <dd>{row.value}</dd>
-                </React.Fragment>
-              );
-            })}
-          </dl>
-        ) : (
-          <p className="field__hint">Đang đọc thông tin platform…</p>
-        )}
-      </section>
+			<section className="card">
+				<h2 className="card__title">Môi trường thực thi</h2>
+				{info ? (
+					<dl className="kv">
+						{info.details.map(function (row) {
+							return (
+								<React.Fragment key={row.name}>
+									<dt>{row.name}</dt>
+									<dd>{row.value}</dd>
+								</React.Fragment>
+							);
+						})}
+					</dl>
+				) : (
+					<p className="field__hint">Đang đọc thông tin platform…</p>
+				)}
+			</section>
 
-      <footer className="shell__footer">
-        {providers.length} provider đăng ký trong container · đang dùng{' '}
-        <code>{provider.id}</code>
-      </footer>
-    </main>
-  );
+			<footer className="shell__footer">
+				{providers.length} provider đăng ký trong container · đang dùng <code>{provider.id}</code>
+			</footer>
+		</main>
+	);
 }

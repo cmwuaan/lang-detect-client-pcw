@@ -1,18 +1,23 @@
 @use '../abstracts' as a;
 
 ////
-/// Token màu khai báo ở 3 scope:
-///   :root                                     -> light (mặc định)
-///   @media dark + :not([data-theme='light'])  -> theo hệ điều hành
-///   :root[data-theme='dark']                  -> theo toggle, thắng cả 2 chiều
-/// Thiếu scope 3 thì toggle không bật được dark khi OS đang light; thiếu
-/// scope 2 thì mặc định "theo hệ thống" không hoạt động.
+/// Mặc định là LIGHT, không theo `prefers-color-scheme` của hệ điều hành.
+///
+/// Dark chỉ bật khi có người stamp `data-theme="dark"` lên <html> một cách
+/// tường minh. Muốn quay lại kiểu "theo hệ thống" thì thêm khối này:
+///
+///   @media (prefers-color-scheme: dark) {
+///     :root:not([data-theme='light']) { @include a.color-tokens(dark); }
+///   }
+///
+/// `color-tokens()` cũng đặt `color-scheme`, nên scrollbar và control gốc của
+/// trình duyệt cũng theo đúng theme.
 ////
 
-:root { @include a.color-tokens(light); }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) { @include a.color-tokens(dark); }
+:root {
+	@include a.color-tokens(light);
 }
 
-:root[data-theme='dark'] { @include a.color-tokens(dark); }
+:root[data-theme='dark'] {
+	@include a.color-tokens(dark);
+}
