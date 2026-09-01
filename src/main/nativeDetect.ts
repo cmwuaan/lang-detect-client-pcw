@@ -1,0 +1,89 @@
+import { IpcMain } from 'electron';
+import * as path from 'path';
+
+import { NativeDetectStatus, NativeLanguageHypothesis, IPC } from '@shared/ipc';
+
+import type NativeLibs from '../../nativelibs';
+
+/**
+ * Cầu nối giữa main process và nativelibs/zlang.
+ *
+ * Cùng cách zalo-pc-app dùng nativelibs: main/preload gọi `require('nativelibs')`
+ * rồi lấy module theo tên (`.zlang()`), native module không bao giờ được bundle
+ * vào bundle JS — nó phải nằm ngoài để `.node` còn nạp được.
+ *
+ * Ở repo này đường dẫn là tương đối tới thư mục nativelibs/ cạnh dist/, khớp với
+ * external `commonjs2 ../native/nativelibs` mà webpack của zalo-pc-app dùng.
+ */
+
+/** dist/main/main.js -> <root>/nativelibs. Giữ đúng cả khi đã đóng gói. */
+const NATIVELIBS_DIR = path.join(__dirname, '..', '..', 'nativelibs');
+
+type Zlang = ReturnType<typeof NativeLibs.zlang>;
+
+let zlang: Zlang | null = null;
+let loadError: Error | null = null;
+
+/**
+ * Nạp trễ và chỉ nạp một lần. Native module lỗi thì app vẫn chạy, chỉ phương
+ * pháp này báo không khả dụng — nên không có require nào ở top level.
+ */
+function nativeModule(): Zlang | null {
+	if (zlang || loadError) return zlang;
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		const nativelibs = require(NATIVELIBS_DIR) as typeof NativeLibs;
+		zlang = nativelibs.zlang();
+	} catch (err) {
+		loadError = err instanceof Error ? err : new Error(String(err));
+		console.error('[nativeDetect] không nạp được nativelibs/zlang:', loadError.message);
+	}
+	return zlang;
+}
+
+function status(): NativeDetectStatus {
+	const module = nativeModule();
+
+	if (!module) {
+		return {
+			supported: false,
+			reason: loadError ? 'load-failed: ' + loadError.message : 'native-binding-missing',
+			backend: 'none',
+			scoreKind: 'none',
+			version: null,
+		};
+	}
+
+	const availability = module.availability();
+	const info = module.info();
+
+	return {
+		supported: availability.supported,
+		reason: availability.reason || null,
+		backend: info.backend,
+		scoreKind: info.scoreKind,
+		version: info.version,
+	};
+}
+
+async function detect(text: string, maxResults?: number): Promise<NativeLanguageHypothesis[]> {
+	const module = nativeModule();
+	if (!module) throw new Error('nativelibs/zlang không nạp được');
+
+	// zlang trả về đúng hình dạng { detectedLanguage, confidence } nên không cần map.
+	return module.detect(text, maxResults ? { maxResults: maxResults } : undefined);
+}
+
+export function registerNativeDetectHandlers(ipcMain: IpcMain): void {
+	ipcMain.handle(IPC.nativeDetectStatus, function (): NativeDetectStatus {
+		return status();
+	});
+
+	ipcMain.handle(IPC.nativeDetect, function (
+		_event,
+		text: string,
+		maxResults?: number
+	): Promise<NativeLanguageHypothesis[]> {
+		return detect(text, maxResults);
+	});
+}

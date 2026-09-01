@@ -1,0 +1,25 @@
+{
+	"compilerOptions": {
+		/* Chỉ chạy trong Node/Electron main process, không có DOM. */
+		"target": "ES2018",
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"lib": ["ES2018"],
+		"types": ["node"],
+
+		/* Phát index.js + index.d.ts ngay cạnh index.ts. */
+		"rootDir": ".",
+		"outDir": ".",
+		"declaration": true,
+
+		"strict": true,
+		"noUnusedLocals": true,
+		"noImplicitReturns": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true
+	},
+	"include": ["index.ts"],
+	/* outDir là "." nên tsc tự cho "." vào exclude và không thấy input nào —
+	   phải ghi đè bằng exclude rỗng. */
+	"exclude": []
+}

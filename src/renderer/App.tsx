@@ -104,9 +104,6 @@ export function App(props: AppProps): JSX.Element {
 			<header className="shell__header">
 				<div>
 					<h1>Lang Detect</h1>
-					<p className="shell__tagline">
-						Nhận diện ngôn ngữ ngoại tuyến — cùng một bundle chạy cả web và desktop
-					</p>
 				</div>
 				<div className="u-row">
 					<span className={'badge' + (platform.isDesktop ? ' badge--desktop' : '')}>

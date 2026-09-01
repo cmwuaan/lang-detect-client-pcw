@@ -1,0 +1,28 @@
+[package]
+name = "zlang"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+# napi bắt buộc cdylib; artifact .dylib được đổi tên thành .node.
+crate-type = ["cdylib"]
+
+[dependencies]
+# napi4 là mức tối thiểu cho AsyncTask (threadsafe function không cần ở đây).
+napi = { version = "2", default-features = false, features = ["napi4"] }
+napi-derive = "2"
+
+[build-dependencies]
+napi-build = "2"
+# Biên dịch bridge Objective-C trên macOS. Không dùng trên Windows.
+cc = "1"
+
+[profile.release]
+# Module chỉ vài KB; LTO không đáng thời gian link. `strip` bỏ symbol table.
+lto = false
+strip = "symbols"
+
+[profile.dev]
+debug = false
+incremental = false

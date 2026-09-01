@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import { AppInfo, IPC } from '@shared/ipc';
 
+import { registerNativeDetectHandlers } from './nativeDetect';
 import { osLabel } from './osInfo';
 
 function createWindow(): void {
@@ -46,6 +47,8 @@ function registerIpcHandlers(): void {
 			arch: process.arch,
 		};
 	});
+
+	registerNativeDetectHandlers(ipcMain);
 }
 
 void app.whenReady().then(function () {

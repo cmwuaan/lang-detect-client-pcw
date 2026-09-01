@@ -1,0 +1,8 @@
+{
+	"name": "nativelibs",
+	"version": "1.0.0",
+	"description": "native modules for zalo pc — bản thu nhỏ, chỉ có zlang",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"private": true
+}

@@ -13,7 +13,11 @@
 		"dev:pc": "node scripts/build.js --watch --electron",
 		"build": "npm-run-all clean build:only",
 		"build:only": "node scripts/build.js",
-		"start": "npm run build && electron ."
+		"start": "npm run build && electron .",
+		"zlang": "npm-run-all zlang:node zlang:types",
+		"zlang:node": "node nativelibs/zlang/scripts/build-node.js",
+		"zlang:types": "tsc -p nativelibs/zlang/tsconfig.json",
+		"zlang:smoke": "node nativelibs/zlang/scripts/smoke.js"
 	},
 	"keywords": [
 		"language detector"
@@ -27,17 +31,17 @@
 		"react": "16.14.0",
 		"react-dom": "16.14.0",
 		"reflect-metadata": "0.1.13",
-		"tsyringe": "4.8.0"
+		"tsyringe": "4.6.0"
 	},
 	"devDependencies": {
-		"@types/node": "22.15.3",
-		"@types/react": "16.14.0",
-		"@types/react-dom": "16.9.8",
-		"electron": "44.0.0",
+		"@types/node": "17.0.35",
+		"@types/react": "16.8.25",
+		"@types/react-dom": "17.0.9",
+		"electron": "22.3.9",
 		"esbuild": "0.25.10",
-		"npm-run-all": "4.1.5",
-		"rimraf": "3.0.2",
+		"npm-run-all": "2.3.0",
+		"rimraf": "2.5.4",
 		"sass": "1.71.1",
-		"typescript": "5.9.2"
+		"typescript": "3.9.6"
 	}
 }

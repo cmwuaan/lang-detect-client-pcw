@@ -1,0 +1,13 @@
+# Giữ khớp với deployment target mà bridge Objective-C được biên dịch: rustc lúc
+# link và clang lúc compile phải đồng ý, nếu không .node mang LC_BUILD_VERSION
+# lệch nhau. NaturalLanguage.framework có từ macOS 10.14; chốt 10.15 cho chắc.
+[env]
+MACOSX_DEPLOYMENT_TARGET = "10.15"
+
+# Link tĩnh C runtime để .node không phụ thuộc VC++ Redistributable trên máy
+# người dùng — cùng lựa chọn như zocr/host.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
