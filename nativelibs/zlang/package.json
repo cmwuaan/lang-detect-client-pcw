@@ -12,7 +12,13 @@
 		"build:node:darwin-x64": "node scripts/build-node.js x86_64-apple-darwin",
 		"build:node:win32-ia32": "node scripts/build-node.js i686-pc-windows-msvc",
 		"build:node:win32-x64": "node scripts/build-node.js x86_64-pc-windows-msvc",
+		"build:cpp": "node scripts/build-node.js --impl=cpp",
+		"build:cpp:darwin-arm64": "node scripts/build-node.js aarch64-apple-darwin --impl=cpp",
+		"build:cpp:darwin-x64": "node scripts/build-node.js x86_64-apple-darwin --impl=cpp",
+		"build:cpp:win32-ia32": "node scripts/build-node.js i686-pc-windows-msvc --impl=cpp",
+		"build:cpp:win32-x64": "node scripts/build-node.js x86_64-pc-windows-msvc --impl=cpp",
 		"build:types": "tsc -p tsconfig.json",
+		"win7-guard": "node scripts/win7-guard.js",
 		"test": "node scripts/smoke.js"
 	},
 	"devDependencies": {

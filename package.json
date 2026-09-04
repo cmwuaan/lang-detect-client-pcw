@@ -18,6 +18,7 @@
 		"pack:win:only": "node scripts/pack-win.js",
 		"zlang": "npm-run-all zlang:node zlang:types",
 		"zlang:node": "node nativelibs/zlang/scripts/build-node.js",
+		"zlang:cpp": "node nativelibs/zlang/scripts/build-node.js --impl=cpp",
 		"zlang:types": "tsc -p nativelibs/zlang/tsconfig.json",
 		"zlang:smoke": "node nativelibs/zlang/scripts/smoke.js"
 	},
@@ -41,6 +42,7 @@
 		"@types/react-dom": "17.0.9",
 		"electron": "22.3.9",
 		"esbuild": "0.25.10",
+		"node-addon-api": "7.1.1",
 		"npm-run-all": "2.3.0",
 		"rimraf": "2.5.4",
 		"sass": "1.71.1",

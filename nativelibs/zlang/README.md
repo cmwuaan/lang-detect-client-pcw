@@ -34,13 +34,19 @@ app vẫn chạy bình thường.
 index.ts ──► index.js + index.d.ts      facade: chọn prebuilt, dịch dữ liệu, gate
    │
    ▼
-darwin-arm64/zlang.darwin-arm64.node    napi (src/lib.rs) — AsyncTask, off main thread
-   │
+darwin-arm64/zlang.darwin-arm64.node    lớp keo napi — chạy off main thread
+   │                                    HAI bản dựng ra cùng file này:
+   │                                      src/lib.rs + src/backend.rs   (Rust)
+   │                                      src-cpp/addon.cc              (C++)
    ▼
 src/zlang_bridge.h                      MỘT ABI phẳng cho mọi OS
    ├── src/bridge_darwin.swift          NLLanguageRecognizer, @_cdecl
    └── src/bridge_windows.c             MappingRecognizeText (ELS)
 ```
+
+Hai bản triển khai lớp keo tồn tại song song và **dùng chung** bridge cùng ABI ở
+`src/` — logic nhận diện không nhân bản. Xem §Build về cách chuyển qua lại, và
+`src-cpp/addon.cc` về lý do bản C++ tồn tại.
 
 Ba quyết định đáng giải thích:
 
@@ -92,8 +98,10 @@ native báo lỗi thật. `maxResults` bị chặn trong 1..16.
 
 ## Build
 
-Yêu cầu: Rust stable, Node 18+. macOS cần Xcode Command Line Tools (dùng
-`swiftc`); Windows cần Visual Studio Build Tools kèm Windows SDK.
+Yêu cầu: Node 18+. macOS cần Xcode Command Line Tools (dùng `swiftc`); Windows
+cần Visual Studio Build Tools kèm Windows SDK. Bản Rust cần rustup — phiên bản
+đã ghim trong `rust-toolchain.toml`, **đừng nâng** (xem §Hai bản triển khai).
+Bản C++ cần thêm Python 3 cho node-gyp.
 
 `build.rs` gọi `swiftc -emit-library -static` để ra một static archive rồi link
 vào `.node`. **Swift build TĨNH chứ không ra dylib như zocr**: zocr phải xuất
@@ -137,6 +145,60 @@ dependency. Link flag cho napi vẫn do `napi-build` lo trong `build.rs`.
 
 **`.node` và `index.js`/`index.d.ts` được commit**, giống mọi module khác trong
 nativelibs: máy build của app không có Rust toolchain.
+
+### Hai bản triển khai: Rust và C++
+
+Lớp keo napi có hai bản, chọn bằng `--impl`. Cả hai dùng chung bridge ở `src/`,
+xuất ra **cùng một đường dẫn artifact**, nên `index.ts` không biết và không cần
+biết bản nào đang chạy — đổi bản là build lại, không sửa một dòng JS nào.
+
+```bash
+npm run build:cpp:win32-ia32      # C++ qua node-gyp
+npm run build:node:win32-ia32     # Rust qua cargo (mặc định)
+```
+
+Bản nào đang nằm trong thư mục nền tảng thì đọc `build-info.json` cạnh `.node` —
+nó ghi cả `impl` lẫn phiên bản toolchain đã dựng.
+
+| | Rust (`src/`) | C++ (`src-cpp/`) |
+|---|---|---|
+| Công cụ | cargo, rustup | node-gyp, **Python 3** |
+| Kích thước `.node` (darwin-arm64) | ~402 KB | ~94 KB |
+| Sàn Windows | **đóng băng ở Rust 1.77.2** | khai báo bằng `_WIN32_WINNT` |
+| Async | `AsyncTask` của napi-rs | `Napi::AsyncWorker` |
+
+**Vì sao có bản C++.** `std` của Rust từ 1.78 import tĩnh `WaitOnAddress`
+(Windows 8+) và `ProcessPrng` (Windows 10+), nên binary dựng bằng Rust mới hơn
+**không nạp được trên Windows 7** — `LoadLibrary` hỏng, `require()` ném lỗi, và
+tầng trên chỉ nói được `native-binding-missing`. Giữ Win7 với Rust nghĩa là
+đóng băng ở `rust-toolchain.toml` = 1.77.2 vĩnh viễn, và bức tường MSRV của các
+crate phụ thuộc chỉ cao thêm theo thời gian. MSVC không gắn sàn OS vào phiên bản
+compiler.
+
+Bản C++ dùng **Node-API** (không phải header của V8), nên ABI ổn định: artifact
+build bằng header Node 22 vẫn nạp được trong Electron 22 (Node 16.17, Node-API
+8) mà không phải build lại theo từng phiên bản Electron.
+
+`binding.gyp` cần `node-addon-api` (chỉ header) — đã khai ở `devDependencies` của
+repo root. gyp không có luật build Swift, nên `scripts/build-cpp.js` gọi `swiftc`
+sinh static archive **trước** khi node-gyp link.
+
+### Cửa chặn Windows 7
+
+Sau mỗi lần build cho Windows, `scripts/win7-guard.js` đọc bảng import PE của
+artifact và **cho build thất bại** nếu thấy API chỉ có trên Windows 8/10, hoặc
+thấy `VCRUNTIME`/`MSVCP` (nghĩa là CRT chưa link tĩnh và `.node` sẽ đòi bộ VC++
+redistributable). Đạt thì chỉ còn `elscore.dll`, `kernel32.dll`, `ntdll.dll`.
+
+Cửa chặn chỉ đọc binary nên chạy được trên bất kỳ `.node`/`.dll` nào, kể cả của
+module khác trong nativelibs:
+
+```bash
+node scripts/win7-guard.js <đường-dẫn.node> [...]
+```
+
+Không có bước này thì "hỗ trợ Windows 7" chỉ là một dòng trong tài liệu chứ
+không phải tính chất được bảo đảm — và đó đúng là cách lỗi trên lọt tới máy ảo.
 
 ## Test
 
