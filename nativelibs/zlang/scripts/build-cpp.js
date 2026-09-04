@@ -120,7 +120,32 @@ function build(outDir) {
 	const nodeGyp = resolveNodeGyp();
 	// `rebuild` = clean + configure + build: tránh cấu hình cũ của arch trước
 	// còn sót lại, thứ sinh ra lỗi link rất khó hiểu khi đổi qua lại ia32/x64.
-	run(process.execPath, [nodeGyp, 'rebuild', '--arch=' + arch, '--release']);
+	try {
+		run(process.execPath, [nodeGyp, 'rebuild', '--arch=' + arch, '--release']);
+	} catch (err) {
+		if (process.platform === 'win32') {
+			/*
+			 * Lỗi hay gặp nhất và khó đoán nhất: node-gyp dò Visual Studio qua
+			 * bảng ánh xạ CỨNG (15->2017, 16->2019, 17->2022) trong
+			 * lib/find-visualstudio.js. Máy chỉ có VS mới hơn sẽ báo
+			 * `unknown version "undefined"` — nghe như thiếu Visual Studio, thật
+			 * ra là node-gyp quá cũ để đọc phiên bản đó. Chạy từ Developer
+			 * Command Prompt KHÔNG cứu được: VCINSTALLDIR chỉ lọc bản nào được
+			 * dùng, không bỏ qua bảng ánh xạ.
+			 */
+			console.error(
+				'\n[zlang] Nếu log phía trên có `find VS unknown version "undefined"`:\n' +
+					'  node-gyp 8.4.1 chỉ nhận ra Visual Studio 2017/2019/2022.\n' +
+					'  Cách sửa: cài Build Tools for Visual Studio 2022, kèm component\n' +
+					'  `MSVC v141 - VS 2017 C++ x64/x86 build tools` cho việc target Win7,\n' +
+					'  rồi `set ZLANG_MSVS_TOOLSET=v141`.\n\n' +
+					'  Hoặc dùng đường Rust — nó dò MSVC bằng logic không giới hạn phiên bản\n' +
+					'  nên chạy được với bản Visual Studio mới nhất:\n' +
+					'    npm run build:node:win32-' + arch + '\n'
+			);
+		}
+		throw err;
+	}
 
 	const built = path.join(ROOT, 'build', 'Release', 'zlang.node');
 	if (!fs.existsSync(built)) throw new Error('Không thấy artifact: ' + built);
