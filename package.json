@@ -14,6 +14,8 @@
 		"build": "npm-run-all clean build:only",
 		"build:only": "node scripts/build.js",
 		"start": "npm run build && electron .",
+		"pack:win": "npm-run-all build pack:win:only",
+		"pack:win:only": "node scripts/pack-win.js",
 		"zlang": "npm-run-all zlang:node zlang:types",
 		"zlang:node": "node nativelibs/zlang/scripts/build-node.js",
 		"zlang:types": "tsc -p nativelibs/zlang/tsconfig.json",
