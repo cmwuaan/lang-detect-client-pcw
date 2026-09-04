@@ -60,8 +60,11 @@ function resolveNodeGyp() {
 	}
 
 	throw new Error(
-		'Không tìm thấy node-gyp. Cài tường minh:\n' +
-			'  npm install --save-dev node-gyp\n\n' +
+		'Không tìm thấy node-gyp. Cài đúng bản đã ghim:\n' +
+			'  npm install --save-dev node-gyp@8.4.1\n\n' +
+			'ĐỪNG lấy `latest`: bản >= 10 bỏ hỗ trợ Node 14, mà zalo-pc-app build\n' +
+			'bằng Node 14. 8.4.1 là bản `mp4thumb` trong nativelibs thật đang dùng\n' +
+			'(xem README §Phiên bản node-gyp và Visual Studio).\n\n' +
 			'Đã thử các đường sau:\n  ' + candidates.join('\n  ') + '\n\n' +
 			'node-gyp cũng cần Python 3 — đó là dependency mà đường Rust không có.'
 	);

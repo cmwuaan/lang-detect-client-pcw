@@ -183,6 +183,33 @@ build bằng header Node 22 vẫn nạp được trong Electron 22 (Node 16.17, 
 repo root. gyp không có luật build Swift, nên `scripts/build-cpp.js` gọi `swiftc`
 sinh static archive **trước** khi node-gyp link.
 
+#### Phiên bản node-gyp và Visual Studio — đừng nâng bừa
+
+`node-gyp` ghim ở **8.4.1**, `node-addon-api` ở **7.1.1** — **khớp đúng
+`mp4thumb`** trong repo nativelibs thật, module node-gyp gần nhất ở đó. Cả hai
+chạy được trên **Node 14**, vì `zalo-pc-app` build bằng Node 14 và mọi thứ ở đây
+phải dựng được trong cùng môi trường đó.
+
+Đánh đổi phải biết: node-gyp dò Visual Studio qua một bảng ánh xạ **cứng** trong
+`lib/find-visualstudio.js`, và bảng đó chỉ có `15 → 2017`, `16 → 2019`,
+`17 → 2022`. Hỗ trợ `18` chỉ xuất hiện từ **node-gyp 12**, mà bản 12 đòi Node
+`^20.17 || >=22.9`. Vậy:
+
+| node-gyp | Node | Nhận ra VS 18 |
+|---|---|---|
+| 8.4.1 (đang ghim, khớp mp4thumb) | Node 10.12 trở lên | không |
+| 9.4.1 | Node 12.13 trở lên | không |
+| 11.4.2 | Node 18.17 trở lên | **không** |
+| 12.4.0 | Node 20.17 trở lên | có |
+
+Máy chỉ có Visual Studio 18 sẽ gặp `find VS unknown version "undefined"` — đó
+không phải thiếu Visual Studio, mà là node-gyp quá cũ để đọc phiên bản đó.
+
+Điều này **không phải hạn chế** trong thực tế: toolset của VS 18 dù sao cũng
+không target được Windows 7, nên vẫn phải cài VS 2019 (hoặc VS 2022 kèm component
+toolset v141/v142) — và node-gyp 9.4.1 nhận ra chúng bình thường. Chọn toolset
+cụ thể bằng `set ZLANG_MSVS_TOOLSET=v141`.
+
 ### Cửa chặn Windows 7
 
 Sau mỗi lần build cho Windows, `scripts/win7-guard.js` đọc bảng import PE của

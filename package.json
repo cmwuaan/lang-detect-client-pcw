@@ -43,6 +43,7 @@
 		"electron": "22.3.9",
 		"esbuild": "0.25.10",
 		"node-addon-api": "7.1.1",
+		"node-gyp": "8.4.1",
 		"npm-run-all": "2.3.0",
 		"rimraf": "2.5.4",
 		"sass": "1.71.1",

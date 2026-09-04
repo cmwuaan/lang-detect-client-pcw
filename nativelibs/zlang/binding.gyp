@@ -6,7 +6,14 @@
     "zlang_version": "<!(node -p \"require('./package.json').version\")",
     # KHÔNG dùng `require('node-addon-api').include_dir`: nó trả về đường dẫn
     # tương đối theo cwd, nên đổi nơi gọi là gyp tìm không ra header.
-    "napi_include": "<!(node -p \"require('path').dirname(require.resolve('node-addon-api/package.json'))\")"
+    "napi_include": "<!(node -p \"require('path').dirname(require.resolve('node-addon-api/package.json'))\")",
+    # Chọn toolset MSVC cụ thể, ví dụ:  set ZLANG_MSVS_TOOLSET=v141
+    #
+    # Cần khi bản Visual Studio trên máy quá mới để target Windows 7. MSVC từ
+    # v143 trở đi đã bỏ dần khả năng đó; v141 (VS2017) và v142 (VS2019) thì còn.
+    # Cài qua Visual Studio Installer -> Individual components.
+    # Để rỗng thì dùng toolset mặc định của bản VS đang có.
+    "zlang_toolset%": "<!(node -p \"process.env.ZLANG_MSVS_TOOLSET||''\")"
   },
   "targets": [
     {
@@ -82,7 +89,10 @@
               "Debug": {
                 "msvs_settings": { "VCCLCompilerTool": { "RuntimeLibrary": 1 } }
               }
-            }
+            },
+            "conditions": [
+              ["zlang_toolset!=''", { "msbuild_toolset": "<(zlang_toolset)" }]
+            ]
           }
         ]
       ]
