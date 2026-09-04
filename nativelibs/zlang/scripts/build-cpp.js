@@ -41,22 +41,28 @@ function resolveNodeGyp() {
 		/* Chưa khai trong devDependencies — thử bản npm ship kèm. */
 	}
 
-	const bundled = path.join(
-		path.dirname(process.execPath),
-		'..',
-		'lib',
-		'node_modules',
-		'npm',
-		'node_modules',
-		'node-gyp',
-		'bin',
-		'node-gyp.js'
-	);
-	if (fs.existsSync(bundled)) return bundled;
+	/*
+	 * Bố cục npm khác nhau giữa hai hệ, phải thử cả hai:
+	 *   POSIX   <node>/lib/node_modules/npm/...
+	 *   Windows <node>/node_modules/npm/...      (KHÔNG có lib/)
+	 * Chỉ dò một bố cục là trên Windows ghép ra "C:\Program Files\lib\..." —
+	 * đường không tồn tại, và lỗi hiện ra dưới dạng "không tìm thấy node-gyp".
+	 */
+	const nodeDir = path.dirname(process.execPath);
+	const tail = ['node_modules', 'npm', 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'];
+	const candidates = [
+		path.join(nodeDir, ...tail),
+		path.join(nodeDir, '..', 'lib', ...tail),
+	];
+
+	for (const candidate of candidates) {
+		if (fs.existsSync(candidate)) return candidate;
+	}
 
 	throw new Error(
-		'Không tìm thấy node-gyp.\n' +
-			'  npm install --save-dev node-gyp\n' +
+		'Không tìm thấy node-gyp. Cài tường minh:\n' +
+			'  npm install --save-dev node-gyp\n\n' +
+			'Đã thử các đường sau:\n  ' + candidates.join('\n  ') + '\n\n' +
 			'node-gyp cũng cần Python 3 — đó là dependency mà đường Rust không có.'
 	);
 }
