@@ -57,9 +57,20 @@ function status(): NativeDetectStatus {
 	const availability = module.availability();
 	const info = module.info();
 
+	/*
+	 * `reason` của zlang là mã phân loại ('native-binding-missing'), còn câu lỗi
+	 * thật của OS nằm ở `info.loadError` — và trước đây nó bị vứt đi. Trên
+	 * Windows 7 UI chỉ hiện 'native-binding-missing', trong khi loadError nói rõ
+	 * "The specified module could not be found": đủ để biết là thiếu DLL phụ
+	 * thuộc chứ không phải thiếu file .node. Ghép cả hai vào.
+	 */
+	const reason = availability.reason
+		? availability.reason + (info.loadError ? ': ' + info.loadError : '')
+		: null;
+
 	return {
 		supported: availability.supported,
-		reason: availability.reason || null,
+		reason: reason,
 		backend: info.backend,
 		scoreKind: info.scoreKind,
 		version: info.version,
