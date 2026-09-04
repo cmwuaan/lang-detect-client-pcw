@@ -108,9 +108,10 @@ const rendererOptions = {
 	outfile: path.join(RENDERER_OUT, 'renderer.js'),
 	bundle: true,
 	format: 'iife',
-	// Sàn cho bản web; Electron 44 (Chromium 152) thừa sức chạy. Web API
-	// LanguageDetector cần Chromium >= 138 lúc RUNTIME — đây chỉ là mức
-	// downlevel cú pháp nên để thấp cho bản web chạy được trên nhiều máy.
+	// Khớp đúng Chromium 108 của Electron 22.3.9 — bản Electron cuối còn hỗ trợ
+	// Windows 7, mà Win7 nằm trong ma trận hỗ trợ (README §Môi trường). Web API
+	// LanguageDetector cần Chromium >= 138 lúc RUNTIME; đây chỉ là mức downlevel
+	// cú pháp nên bản web vẫn chạy được trên nhiều máy.
 	target: ['chrome108'],
 	jsx: 'transform',
 	alias: alias,
@@ -127,8 +128,10 @@ function electronOptions(name, entry, devServerUrl) {
 		bundle: true,
 		platform: 'node',
 		format: 'cjs',
-		// Electron 44 nhúng Node 24.
-		target: ['node24'],
+		// Electron 22.3.9 nhúng Node 16.17.1 — KHÔNG phải Node mới. Để target cao
+		// hơn thì esbuild giữ nguyên cú pháp hiện đại và main process nổ
+		// SyntaxError lúc chạy.
+		target: ['node16'],
 		// Electron được resolve lúc runtime, không bundle vào.
 		external: ['electron'],
 		alias: alias,
