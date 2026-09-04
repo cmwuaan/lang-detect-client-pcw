@@ -22,36 +22,37 @@ const ROOT = path.join(__dirname, '..');
 const TARGETS = {
 	'aarch64-apple-darwin': 'darwin-arm64',
 	'x86_64-apple-darwin': 'darwin-x64',
-	'i686-win7-windows-msvc': 'win32-ia32',
-	'x86_64-win7-windows-msvc': 'win32-x64',
-	// Hai target thường: KHÔNG chạy được trên Windows 7 (xem assertWin7Safe).
-	// Giữ lại để build thử, nhưng bản ship phải là target *-win7-*.
 	'i686-pc-windows-msvc': 'win32-ia32',
 	'x86_64-pc-windows-msvc': 'win32-x64',
 };
-
-/**
- * Target `*-win7-windows-msvc` là tier 3: rustup không có sẵn std dựng trước,
- * phải tự build std từ nguồn nên cần nightly + component rust-src.
- */
-function isWin7Target(target) {
-	return target.indexOf('-win7-windows-') !== -1;
-}
 
 function hostTarget() {
 	const byPlatform = {
 		'darwin-arm64': 'aarch64-apple-darwin',
 		'darwin-x64': 'x86_64-apple-darwin',
-		// Mặc định của máy Windows là target win7, không phải target thường:
-		// Win7 nằm trong ma trận hỗ trợ, nên bản dựng "tình cờ" phải là bản chạy
-		// được ở đó, chứ không phải bản phải nhớ mới chọn đúng.
-		'win32-ia32': 'i686-win7-windows-msvc',
-		'win32-x64': 'x86_64-win7-windows-msvc',
+		'win32-ia32': 'i686-pc-windows-msvc',
+		'win32-x64': 'x86_64-pc-windows-msvc',
 	};
 	const key = process.platform + '-' + process.arch;
 	const target = byPlatform[key];
 	if (!target) throw new Error('Không có target Rust cho ' + key);
 	return target;
+}
+
+/**
+ * rust-toolchain.toml ghim 1.77.2 nhưng `profile = "minimal"` chỉ kéo std của
+ * máy host. Tự thêm target còn thiếu, thay vì để cargo báo một lỗi mà cách sửa
+ * nằm ở chỗ khác.
+ */
+function ensureTarget(target) {
+	const installed = execFileSync('rustup', ['target', 'list', '--installed'], {
+		cwd: ROOT,
+		encoding: 'utf8',
+	});
+	if (installed.split(/\r?\n/).indexOf(target) !== -1) return;
+
+	console.log('[zlang] rustup target add ' + target);
+	execFileSync('rustup', ['target', 'add', target], { cwd: ROOT, stdio: 'inherit' });
 }
 
 // ------------------------------------------------------- kiểm tra Windows 7
@@ -148,10 +149,10 @@ function assertWin7Safe(file) {
 	if (bad.length) {
 		throw new Error(
 			'Artifact KHÔNG chạy được trên Windows 7:\n  ' + bad.join('\n  ') + '\n\n' +
-				'Dựng bằng target win7 + nightly:\n' +
-				'  rustup toolchain install nightly\n' +
-				'  rustup component add rust-src --toolchain nightly\n' +
-				'  npm run build:node:win32-ia32'
+				'Gần như chắc chắn là cargo đã dùng toolchain khác 1.77.2. Kiểm tra:\n' +
+				'  rustc -vV        (phải là 1.77.2)\n' +
+				'  cat rust-toolchain.toml\n' +
+				'Rust >= 1.78 không dựng được binary chạy trên Win7.'
 		);
 	}
 
@@ -172,15 +173,13 @@ function main() {
 		);
 	}
 
-	const args = ['build', '--release', '--target', target];
-	if (isWin7Target(target)) {
-		// Tier 3 nên không có std dựng sẵn: `+nightly` và tự build std từ nguồn.
-		args.unshift('+nightly');
-		args.push('-Z', 'build-std=std,panic_abort');
-	}
+	ensureTarget(target);
 
-	console.log('[zlang] cargo ' + args.join(' '));
-	execFileSync('cargo', args, { cwd: ROOT, stdio: 'inherit' });
+	console.log('[zlang] cargo build --release --target ' + target);
+	execFileSync('cargo', ['build', '--release', '--target', target], {
+		cwd: ROOT,
+		stdio: 'inherit',
+	});
 
 	const built = path.join(ROOT, 'target', target, 'release', artifactName(target));
 	if (!fs.existsSync(built)) throw new Error('Không thấy artifact: ' + built);

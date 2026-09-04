@@ -1,0 +1,15 @@
+[toolchain]
+# Rust 1.78 bỏ hỗ trợ Windows 7/8: std chuyển sang `ProcessPrng` (Windows 10+)
+# để seed random và import tĩnh `api-ms-win-core-synch-l1-2-0.dll` (Windows 8+)
+# cho thread parking. Binary dựng bằng 1.78+ KHÔNG nạp được trên Win7 — LoadLibrary
+# hỏng ngay, `require()` ném lỗi, UI chỉ báo được 'native-binding-missing'.
+#
+# 1.77.2 là bản stable CUỐI còn dựng được binary chạy trên Win7 với target thường.
+# README §Môi trường ghi Windows >= 7, nên đây là ràng buộc của sản phẩm.
+#
+# Đường thay thế là target tier 3 `*-win7-windows-msvc`, nhưng nó cần nightly
+# (`-Z build-std`) vì rustup không có std dựng sẵn cho tier 3.
+#
+# Đổi số này thì `assertWin7Safe()` trong scripts/build-node.js sẽ chặn build.
+channel = "1.77.2"
+profile = "minimal"

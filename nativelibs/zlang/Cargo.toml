@@ -14,7 +14,12 @@ napi = { version = "2", default-features = false, features = ["napi4"] }
 napi-derive = "2"
 
 [build-dependencies]
-napi-build = "2"
+# Ghim cứng: napi-build 2.2+ khai MSRV 1.88, mà toolchain của crate này là 1.77.2
+# (rust-toolchain.toml — ràng buộc Windows 7). 2.1.3 là bản cuối còn hợp.
+# `unicode-segmentation` cũng phải giữ ở 1.12.0 vì lý do tương tự; nó là dep bắc
+# cầu nên chỉ ghim được trong Cargo.lock. Đừng chạy `cargo update` không kèm
+# kiểm tra — nó sẽ kéo lại bản mới và build gãy vì MSRV.
+napi-build = "=2.1.3"
 # Biên dịch bridge Objective-C trên macOS. Không dùng trên Windows.
 cc = "1"
 
