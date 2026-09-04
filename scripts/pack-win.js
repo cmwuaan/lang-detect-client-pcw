@@ -3,8 +3,9 @@
 /**
  * Đóng gói bản Windows để CHẠY THỬ — không phải installer.
  *
- *   node scripts/pack-win.js              # cả ia32 lẫn x64
+ *   node scripts/pack-win.js              # cả ia32 lẫn x64, kèm .zip
  *   node scripts/pack-win.js --arch=ia32  # chỉ 32-bit
+ *   node scripts/pack-win.js --no-zip     # chỉ thư mục, bỏ bước nén
  *
  * Cách làm: tải prebuilt Electron của Windows (đúng version đang pin trong
  * devDependencies), giải nén, rồi thả app vào `resources/app/`. Đó chính xác là
@@ -15,14 +16,20 @@
  * Không có asar: .node phải nằm ngoài asar mới require được, mà đang chạy thử
  * thì thư mục phẳng dễ soi hơn.
  *
- * Kết quả: pc-dist/win32-<arch>/LangDetect.exe — copy nguyên thư mục sang máy
- * Windows rồi chạy. zlang gọi Extended Linguistic Services của OS nên bắt buộc
- * phải thử trên Windows thật, chạy qua Wine không nói lên điều gì.
+ * Chạy được trên CẢ macOS lẫn Windows: chỉ gọi ra ngoài `curl` và `tar`, hai
+ * thứ Windows 10 1803+ có sẵn (tar.exe chính là bsdtar, nén/giải nén zip được).
+ * Trước đây script gọi `shasum`/`unzip`/`zip` — trên Windows là `ENOENT`, và
+ * script chết ngay sau bước tải, chỉ để lại mỗi zip Electron trong .cache/.
+ *
+ * Kết quả: pc-dist/LangDetect-win32-<arch>.zip — chép sang máy/VM Windows, giải
+ * nén, chạy LangDetect.exe. zlang gọi Extended Linguistic Services của OS nên
+ * bắt buộc phải thử trên Windows thật, chạy qua Wine không nói lên điều gì.
  */
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
@@ -52,8 +59,48 @@ function parseArchs() {
 	return archs;
 }
 
+/**
+ * cwd LUÔN ghim về ROOT. `pack()` xoá pc-dist/win32-<arch>/ trước khi giải nén;
+ * nếu shell đang đứng trong thư mục vừa bị xoá thì mọi spawn sau đó chết bằng
+ * `spawnSync ... ENOENT` — lỗi trông như thiếu binary nhưng thật ra là mất cwd.
+ */
 function run(cmd, args, opts) {
-	execFileSync(cmd, args, Object.assign({ stdio: 'inherit' }, opts));
+	execFileSync(cmd, args, Object.assign({ stdio: 'inherit', cwd: ROOT }, opts));
+}
+
+/**
+ * Kiểm tra binary ngoài NGAY TỪ ĐẦU, tự dò PATH thay vì spawn `which`/`where`
+ * (spawn để kiểm tra spawn thì vẫn nổ đúng cái lỗi đang muốn tránh). `ENOENT`
+ * trần từ spawnSync không nói được binary nào thiếu — mà đó chính là cách lỗi
+ * `shasum` trên Windows ẩn mình.
+ */
+function requireTools(names) {
+	const exts =
+		process.platform === 'win32' ? (process.env.PATHEXT || '.EXE').split(';') : [''];
+	const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+
+	const missing = names.filter(function (name) {
+		return !dirs.some(function (dir) {
+			return exts.some(function (ext) {
+				try {
+					fs.accessSync(path.join(dir, name + ext), fs.constants.X_OK);
+					return true;
+				} catch (e) {
+					return false;
+				}
+			});
+		});
+	});
+
+	if (missing.length) {
+		throw new Error(
+			'Không tìm thấy trên PATH: ' + missing.join(', ') + '\n' +
+				(process.platform === 'win32'
+					? 'Cần Windows 10 1803+ (có sẵn curl.exe và tar.exe).\n'
+					: '') +
+				'PATH đang là: ' + (process.env.PATH || '(rỗng)')
+		);
+	}
 }
 
 // ------------------------------------------------------------------ download
@@ -94,7 +141,9 @@ function fetchElectronZip(version, arch) {
 		});
 	if (!want) throw new Error('Không thấy ' + name + ' trong SHASUMS256.txt');
 
-	const got = execFileSync('shasum', ['-a', '256', zip], { encoding: 'utf8' }).trim().split(/\s+/)[0];
+	// Băm bằng crypto của Node, KHÔNG gọi `shasum`: đó là script Perl của
+	// macOS/Linux, trên Windows không tồn tại -> `spawnSync shasum ENOENT`.
+	const got = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
 	if (got !== want[0]) {
 		fs.unlinkSync(zip);
 		throw new Error('Checksum sai cho ' + name + ' (đã xoá cache, chạy lại). ' + got + ' != ' + want[0]);
@@ -175,8 +224,10 @@ function pack(version, arch) {
 	fs.rmSync(dest, { recursive: true, force: true });
 	fs.mkdirSync(dest, { recursive: true });
 
+	// `tar -xf` thay cho `unzip`: bsdtar đọc được zip, và Windows 10 1803+ có
+	// sẵn tar.exe trong khi `unzip` thì không.
 	console.log('[pack] giải nén -> ' + path.relative(ROOT, dest));
-	run('unzip', ['-q', zip, '-d', dest]);
+	run('tar', ['-xf', zip, '-C', dest]);
 
 	// default_app.asar là app demo của Electron; có app thật rồi thì bỏ đi.
 	fs.rmSync(path.join(dest, 'resources', 'default_app.asar'), { force: true });
@@ -200,16 +251,58 @@ function pack(version, arch) {
 	return dest;
 }
 
+/**
+ * Gói lại thành .zip để bê sang VM (shared folder / drag-drop của VirtualBox).
+ * Explorer của Windows tự giải nén được, không cần cài thêm gì trong guest.
+ */
+function makeZip(dest, arch) {
+	const name = 'LangDetect-win32-' + arch + '.zip';
+	const zip = path.join(OUT, name);
+
+	fs.rmSync(zip, { force: true });
+	console.log('[pack] nén ' + name + ' (vài chục giây)');
+
+	// bsdtar mặc định ghi zip ở chế độ `store` — không ép deflate thì file phình
+	// từ ~90MB lên ~200MB.
+	const args = ['--format', 'zip', '--options', 'zip:compression=deflate'];
+	// Không có cờ này, bsdtar của macOS nhét thêm entry `._*` (resource fork)
+	// vào zip; sang Windows chỉ tổ rác. Cờ này là của riêng macOS, tar.exe của
+	// Windows không hiểu nên chỉ thêm đúng chỗ.
+	if (process.platform === 'darwin') args.push('--no-mac-metadata');
+	args.push('--exclude', '.DS_Store', '-cf', zip, path.basename(dest));
+
+	// Chạy từ OUT nên đường dẫn trong zip là `win32-<arch>/...`: giải nén ra là
+	// một thư mục gọn, không đổ tung toé vào Desktop.
+	run('tar', args, { cwd: OUT });
+
+	const mb = Math.round(fs.statSync(zip).size / 1024 / 1024);
+	console.log('[pack] ' + path.relative(ROOT, zip) + ' (' + mb + 'MB)');
+	return zip;
+}
+
 function main() {
 	const version = electronVersion();
 	const archs = parseArchs();
+	const wantZip = process.argv.indexOf('--no-zip') === -1;
+
+	requireTools(['curl', 'tar']);
+
 	console.log('[pack] Electron v' + version + ' — ' + archs.join(', '));
 	archs.forEach(function (arch) {
-		pack(version, arch);
+		const dest = pack(version, arch);
+		if (wantZip) makeZip(dest, arch);
 	});
+
 	console.log('');
-	console.log('  Copy thư mục pc-dist/win32-<arch>/ sang máy Windows rồi chạy LangDetect.exe.');
-	console.log('  (Chạy trên ' + os.platform() + ' không được: exe là binary Windows.)');
+	if (wantZip) {
+		console.log('  Chép pc-dist/LangDetect-win32-<arch>.zip sang VM Windows, giải nén,');
+		console.log('  rồi chạy LangDetect.exe trong thư mục đó.');
+	} else {
+		console.log('  Copy thư mục pc-dist/win32-<arch>/ sang máy Windows rồi chạy LangDetect.exe.');
+	}
+	if (os.platform() !== 'win32') {
+		console.log('  (Chạy trên ' + os.platform() + ' không được: exe là binary Windows.)');
+	}
 	console.log('');
 }
 
