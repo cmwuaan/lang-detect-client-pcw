@@ -5,10 +5,11 @@
 
 use napi::{Error, Result, Status};
 
-/// Số giả thuyết trả về khi caller không chỉ định.
-pub const DEFAULT_MAX_RESULTS: u32 = 3;
-
 /// Khớp ZLANG_MAX_RESULTS trong src/zlang_bridge.h.
+///
+/// Đây là SỨC CHỨA của buffer, không phải một lựa chọn về số kết quả nên trả.
+/// Caller không chỉ định `max_results` thì dùng đúng con số này — xin tất cả
+/// những gì đựng được — chứ module không tự đặt ra một mức "hợp lý" nào.
 pub const MAX_RESULTS: u32 = 16;
 
 /// Khớp ZLANG_TAG_CAP trong src/zlang_bridge.h.
@@ -21,6 +22,41 @@ const TAG_CAP: usize = 24;
 /// nguyên thông tin hạng.
 pub type Hypothesis = (String, Option<f64>);
 
+/// Option điều khiển kết quả — ánh xạ 1-1 sang API của OS, không tự đặt mặc định.
+///
+/// Mọi field đều `Option`/rỗng khi caller không truyền, và bridge chỉ set thứ gì
+/// thật sự có giá trị: không truyền `constraints` thì `languageConstraints`
+/// không được đụng tới, không truyền `input_language` thì `pszInputLanguage` là
+/// NULL. Mặc định là mặc định CỦA OS, không phải của module này.
+#[derive(Default)]
+pub struct DetectOptions {
+    /// `None` = xin tối đa sức chứa buffer (MAX_RESULTS), không phải một mức
+    /// "hợp lý" do module tự nghĩ ra.
+    pub max_results: Option<u32>,
+
+    // --- Apple NaturalLanguage ---
+    /// `languageConstraints`: chỉ xét các thẻ BCP 47 này.
+    pub constraints: Vec<String>,
+    /// `languageHints`: prior của caller, (thẻ BCP 47, trọng số).
+    pub hints: Vec<(String, f64)>,
+
+    // --- Windows ELS ---
+    /// `MAPPING_ENUM_OPTIONS.pszInputLanguage` — lọc DỊCH VỤ, không lọc kết quả.
+    pub input_language: Option<String>,
+    /// `MAPPING_ENUM_OPTIONS.pszInputScript` — cũng lọc dịch vụ.
+    pub input_script: Option<String>,
+    /// `MappingRecognizeText.dwIndex` — vị trí ký tự bắt đầu đọc.
+    pub start_index: Option<u32>,
+}
+
+/// Kết quả một lần detect.
+pub struct Detection {
+    pub hypotheses: Vec<Hypothesis>,
+    /// `NLLanguageRecognizer.dominantLanguage`; None khi backend không có khái
+    /// niệm đó (ELS) hoặc không kết luận được.
+    pub dominant: Option<String>,
+}
+
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod ffi {
     use std::os::raw::{c_char, c_int};
@@ -30,6 +66,24 @@ mod ffi {
     pub struct RawHypothesis {
         pub tag: [c_char; super::TAG_CAP],
         pub confidence: f64,
+    }
+
+    #[repr(C)]
+    pub struct RawLanguageHint {
+        pub tag: *const c_char,
+        pub weight: f64,
+    }
+
+    #[repr(C)]
+    pub struct RawDetectOptions {
+        pub max_results: u32,
+        pub constraints: *const *const c_char,
+        pub constraint_count: u32,
+        pub hints: *const RawLanguageHint,
+        pub hint_count: u32,
+        pub input_language: *const c_char,
+        pub input_script: *const c_char,
+        pub start_index: u32,
     }
 
     impl RawHypothesis {
@@ -47,12 +101,35 @@ mod ffi {
     extern "C" {
         pub fn zlang_bridge_available() -> bool;
         pub fn zlang_bridge_score_kind() -> *const c_char;
+        pub fn zlang_bridge_capabilities() -> u32;
         pub fn zlang_bridge_detect(
             utf8_text: *const c_char,
-            max_out: u32,
+            options: *const RawDetectOptions,
             out: *mut RawHypothesis,
+            dominant_out: *mut c_char,
         ) -> c_int;
     }
+}
+
+/// Khớp ZLANG_CAP_* trong src/zlang_bridge.h.
+pub const CAP_CONSTRAINTS: u32 = 1 << 0;
+pub const CAP_HINTS: u32 = 1 << 1;
+pub const CAP_DOMINANT: u32 = 1 << 2;
+pub const CAP_INPUT_LANGUAGE: u32 = 1 << 3;
+pub const CAP_INPUT_SCRIPT: u32 = 1 << 4;
+pub const CAP_START_INDEX: u32 = 1 << 5;
+
+/// Khớp ZLANG_ERR_UNSUPPORTED_OPTION.
+const ERR_UNSUPPORTED_OPTION: i32 = -5;
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub fn capabilities() -> u32 {
+    unsafe { ffi::zlang_bridge_capabilities() }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn capabilities() -> u32 {
+    0
 }
 
 /// Tên backend, để chẩn đoán và để log.
@@ -100,19 +177,95 @@ pub fn score_kind() -> &'static str {
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-pub fn detect(text: &str, max_results: u32) -> Result<Vec<Hypothesis>> {
+pub fn detect(text: &str, options: DetectOptions) -> Result<Detection> {
     use std::ffi::{CStr, CString};
+    use std::os::raw::c_char;
 
-    let max_out = max_results.clamp(1, MAX_RESULTS);
+    // Không truyền -> xin hết sức chứa buffer. MAX_RESULTS là giới hạn cấu trúc,
+    // không phải một mức "hợp lý" do module tự chọn.
+    let max_out = options.max_results.unwrap_or(MAX_RESULTS).clamp(1, MAX_RESULTS);
 
     // Chuỗi có NUL ở giữa không thể đi qua C ABI; báo lỗi rõ thay vì cắt ngầm.
     let c_text = CString::new(text)
         .map_err(|_| Error::new(Status::InvalidArg, "zlang: text chứa byte NUL"))?;
 
-    let mut buffer = [ffi::RawHypothesis::unset(); MAX_RESULTS as usize];
-    let written = unsafe {
-        ffi::zlang_bridge_detect(c_text.as_ptr(), max_out, buffer.as_mut_ptr())
+    // None -> con trỏ NULL = "không giới hạn" theo hợp đồng ELS.
+    let c_input_language = to_optional_cstring(&options.input_language, "inputLanguage")?;
+    let c_input_script = to_optional_cstring(&options.input_script, "inputScript")?;
+
+    /*
+     * CString phải sống tới hết lời gọi — bridge chỉ mượn con trỏ, không copy
+     * (xem hợp đồng ở zlang_bridge.h). Giữ `_constraint_owned`/`_hint_owned` là
+     * để đúng chuyện đó: bỏ chúng đi thì con trỏ trong mảng thành dangling
+     * NGAY trước khi gọi, và đây là loại lỗi chỉ hiện ra lúc chạy.
+     */
+    let constraint_owned = to_cstrings(&options.constraints, "constraints")?;
+    let constraint_ptrs: Vec<*const c_char> =
+        constraint_owned.iter().map(|s| s.as_ptr()).collect();
+
+    let hint_tags: Vec<String> = options.hints.iter().map(|(t, _)| t.clone()).collect();
+    let hint_owned = to_cstrings(&hint_tags, "hints")?;
+    let hint_entries: Vec<ffi::RawLanguageHint> = hint_owned
+        .iter()
+        .zip(options.hints.iter())
+        .map(|(tag, (_, weight))| ffi::RawLanguageHint {
+            tag: tag.as_ptr(),
+            weight: *weight,
+        })
+        .collect();
+
+    let raw_options = ffi::RawDetectOptions {
+        max_results: max_out,
+        constraints: if constraint_ptrs.is_empty() {
+            std::ptr::null()
+        } else {
+            constraint_ptrs.as_ptr()
+        },
+        constraint_count: constraint_ptrs.len() as u32,
+        hints: if hint_entries.is_empty() {
+            std::ptr::null()
+        } else {
+            hint_entries.as_ptr()
+        },
+        hint_count: hint_entries.len() as u32,
+        input_language: c_input_language
+            .as_ref()
+            .map_or(std::ptr::null(), |s| s.as_ptr()),
+        input_script: c_input_script
+            .as_ref()
+            .map_or(std::ptr::null(), |s| s.as_ptr()),
+        // 0 = đọc từ đầu, đúng mặc định của MappingRecognizeText.
+        start_index: options.start_index.unwrap_or(0),
     };
+
+    let mut buffer = [ffi::RawHypothesis::unset(); MAX_RESULTS as usize];
+    let mut dominant_buf = [0 as c_char; TAG_CAP];
+
+    let written = unsafe {
+        ffi::zlang_bridge_detect(
+            c_text.as_ptr(),
+            &raw_options,
+            buffer.as_mut_ptr(),
+            dominant_buf.as_mut_ptr(),
+        )
+    };
+
+    // Giữ tường minh tới đây để người đọc thấy vì sao chúng chưa bị drop.
+    drop(constraint_owned);
+    drop(hint_owned);
+    drop(c_input_language);
+    drop(c_input_script);
+
+    if written == ERR_UNSUPPORTED_OPTION {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "zlang: backend {} không hỗ trợ một trong các option vừa truyền \
+                 — hỏi info().capabilities trước",
+                name()
+            ),
+        ));
+    }
 
     if written < 0 {
         return Err(Error::new(
@@ -139,11 +292,60 @@ pub fn detect(text: &str, max_results: u32) -> Result<Vec<Hypothesis>> {
         };
         out.push((tag, confidence));
     }
-    Ok(out)
+
+    // Bridge ghi chuỗi rỗng khi không có ngôn ngữ trội.
+    let dominant = unsafe { CStr::from_ptr(dominant_buf.as_ptr()) }
+        .to_string_lossy()
+        .into_owned();
+
+    Ok(Detection {
+        hypotheses: out,
+        dominant: if dominant.is_empty() {
+            None
+        } else {
+            Some(dominant)
+        },
+    })
+}
+
+/// `None`/rỗng -> `None` (bridge nhận NULL = không giới hạn), không tự thay giá trị.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn to_optional_cstring(
+    value: &Option<String>,
+    field: &str,
+) -> Result<Option<std::ffi::CString>> {
+    match value {
+        None => Ok(None),
+        Some(text) if text.is_empty() => Ok(None),
+        Some(text) => std::ffi::CString::new(text.as_str())
+            .map(Some)
+            .map_err(|_| {
+                Error::new(
+                    Status::InvalidArg,
+                    format!("zlang: {} chứa byte NUL", field),
+                )
+            }),
+    }
+}
+
+/// Thẻ ngôn ngữ chứa NUL không đi qua được C ABI — báo lỗi rõ thay vì cắt ngầm.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn to_cstrings(values: &[String], field: &str) -> Result<Vec<std::ffi::CString>> {
+    values
+        .iter()
+        .map(|value| {
+            std::ffi::CString::new(value.as_str()).map_err(|_| {
+                Error::new(
+                    Status::InvalidArg,
+                    format!("zlang: {} chứa byte NUL", field),
+                )
+            })
+        })
+        .collect()
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub fn detect(_text: &str, _max_results: u32) -> Result<Vec<Hypothesis>> {
+pub fn detect(_text: &str, _options: DetectOptions) -> Result<Detection> {
     Err(Error::new(
         Status::GenericFailure,
         "zlang: không có backend nhận diện ngôn ngữ trên hệ điều hành này",

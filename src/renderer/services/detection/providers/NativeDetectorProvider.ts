@@ -86,6 +86,10 @@ export class NativeDetectorProvider implements LanguageDetectorProvider {
 		}
 
 		const expected = (options && options.expectedInputLanguages) || [];
+		// Option native do caller đưa xuống nguyên trạng — lớp này không tự suy
+		// ra constraint/hint từ `expectedInputLanguages`: hai khái niệm đó của Web
+		// API và của Apple không trùng nghĩa, đoán bừa là bịa hành vi.
+		const native = (options && options.native) || {};
 		let destroyed = false;
 
 		function assertAlive(): void {
@@ -99,7 +103,21 @@ export class NativeDetectorProvider implements LanguageDetectorProvider {
 
 			detect: function (input: string): Promise<LanguageDetectionResult[]> {
 				assertAlive();
-				return api.detect(input).then(toWebApiShape).then(withUndetermined);
+				return api
+					.detect({
+						text: input,
+						maxResults: native.maxResults,
+						constraints: native.constraints,
+						hints: native.hints,
+						inputLanguage: native.inputLanguage,
+						inputScript: native.inputScript,
+						startIndex: native.startIndex,
+					})
+					.then(function (detection) {
+						return detection.hypotheses;
+					})
+					.then(toWebApiShape)
+					.then(withUndetermined);
 			},
 
 			measureInputUsage: function (input: string): Promise<number> {

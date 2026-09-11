@@ -54,8 +54,79 @@ enum {
     ZLANG_ERR_BAD_ARG = -1,
     ZLANG_ERR_UNAVAILABLE = -2,
     ZLANG_ERR_BACKEND = -3,
-    ZLANG_ERR_ENCODING = -4
+    ZLANG_ERR_ENCODING = -4,
+    /*
+     * Caller đưa option mà backend này không có khái niệm tương đương.
+     * KHÔNG bỏ qua im lặng: caller đặt constraint rồi tưởng nó có hiệu lực là
+     * sai nguy hiểm hơn nhiều so với một lỗi rõ ràng. Hỏi trước bằng
+     * zlang_bridge_capabilities().
+     */
+    ZLANG_ERR_UNSUPPORTED_OPTION = -5
 };
+
+/*
+ * Bitmask: backend hiểu được option nào.
+ *
+ * Hai nhóm option KHÔNG giao nhau, vì hai OS cho những chỗ vặn khác hẳn nhau:
+ * Apple cho can thiệp vào chính bộ nhận diện (constraints/hints), còn ELS chỉ
+ * cho lọc ở bước CHỌN DỊCH VỤ (input_language/input_script) và cho bắt đầu đọc
+ * từ giữa văn bản (start_index). Không cái nào giả lập được cái kia, nên mỗi
+ * cái có cờ riêng thay vì ép chung một tên.
+ */
+enum {
+    ZLANG_CAP_CONSTRAINTS = 1u << 0,
+    ZLANG_CAP_HINTS = 1u << 1,
+    ZLANG_CAP_DOMINANT = 1u << 2,
+    ZLANG_CAP_INPUT_LANGUAGE = 1u << 3,
+    ZLANG_CAP_INPUT_SCRIPT = 1u << 4,
+    ZLANG_CAP_START_INDEX = 1u << 5
+};
+
+/* Một ngôn ngữ kèm trọng số, dùng cho languageHints. */
+typedef struct {
+    /* Thẻ BCP 47, NUL-terminated. Caller sở hữu, bridge chỉ đọc. */
+    const char *tag;
+    double weight;
+} ZlangLanguageHint;
+
+/*
+ * Option điều khiển kết quả, ánh xạ 1-1 sang property của NLLanguageRecognizer.
+ * Mảng do caller cấp và sở hữu, phải sống hết lời gọi — không copy qua biên FFI.
+ */
+typedef struct {
+    /* Số giả thuyết tối đa; bị chặn ở ZLANG_MAX_RESULTS. Mọi backend đều hiểu. */
+    uint32_t max_results;
+
+    /* --- Apple NaturalLanguage --- */
+
+    /* NLLanguageRecognizer.languageConstraints — NULL/0 nghĩa là không giới hạn. */
+    const char *const *constraints;
+    uint32_t constraint_count;
+
+    /* NLLanguageRecognizer.languageHints — prior của caller. */
+    const ZlangLanguageHint *hints;
+    uint32_t hint_count;
+
+    /* --- Windows ELS --- */
+
+    /*
+     * MAPPING_ENUM_OPTIONS.pszInputLanguage — thẻ IETF, NULL = không giới hạn.
+     *
+     * Lọc ở bước CHỌN DỊCH VỤ, KHÔNG lọc kết quả trả về: nó nói "chỉ lấy engine
+     * nào nhận được ngôn ngữ đầu vào này", chứ không phải "chỉ trả về ngôn ngữ
+     * này". Đây là lý do nó không được gộp chung với `constraints` của Apple.
+     */
+    const char *input_language;
+
+    /* MAPPING_ENUM_OPTIONS.pszInputScript — NULL = không giới hạn. Cũng lọc dịch vụ. */
+    const char *input_script;
+
+    /*
+     * MappingRecognizeText.dwIndex — vị trí ký tự bắt đầu đọc trong văn bản.
+     * 0 = đọc từ đầu. Tính theo ký tự UTF-16, không phải byte.
+     */
+    uint32_t start_index;
+} ZlangDetectOptions;
 
 /* Backend của OS có dùng được ở tiến trình này không. */
 bool zlang_bridge_available(void);
@@ -67,13 +138,24 @@ bool zlang_bridge_available(void);
  */
 const char *zlang_bridge_score_kind(void);
 
+/* Bitmask ZLANG_CAP_* mà backend này hỗ trợ. */
+uint32_t zlang_bridge_capabilities(void);
+
 /*
  * Nhận diện ngôn ngữ của `utf8_text`.
  *
- * `out` phải chứa được `max_out` phần tử; `max_out` bị chặn ở ZLANG_MAX_RESULTS.
+ * `out` phải chứa được `options->max_results` phần tử.
+ *
+ * `dominant_out` trỏ tới ZLANG_TAG_CAP byte; bridge luôn NUL-terminate, ghi
+ * chuỗi rỗng khi backend không có khái niệm "ngôn ngữ trội" tách rời danh sách
+ * giả thuyết. Không được NULL.
+ *
  * Trả về số phần tử đã ghi (có thể 0 khi văn bản quá ngắn/không xác định được),
  * hoặc một trong các mã ZLANG_ERR_* ở trên.
  */
-int32_t zlang_bridge_detect(const char *utf8_text, uint32_t max_out, ZlangHypothesis *out);
+int32_t zlang_bridge_detect(const char *utf8_text,
+                            const ZlangDetectOptions *options,
+                            ZlangHypothesis *out,
+                            char *dominant_out);
 
 #endif /* ZLANG_BRIDGE_H */

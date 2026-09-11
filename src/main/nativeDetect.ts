@@ -2,8 +2,9 @@ import { IpcMain } from 'electron';
 import * as path from 'path';
 
 import {
+	NativeDetection,
+	NativeDetectOptions,
 	NativeDetectStatus,
-	NativeLanguageHypothesis,
 	NativeRawSnapshot,
 	IPC,
 } from '@shared/ipc';
@@ -55,6 +56,14 @@ function status(): NativeDetectStatus {
 			reason: loadError ? 'load-failed: ' + loadError.message : 'native-binding-missing',
 			backend: 'none',
 			scoreKind: 'none',
+			capabilities: {
+				constraints: false,
+				hints: false,
+				dominant: false,
+				inputLanguage: false,
+				inputScript: false,
+				startIndex: false,
+			},
 			version: null,
 		};
 	}
@@ -78,16 +87,20 @@ function status(): NativeDetectStatus {
 		reason: reason,
 		backend: info.backend,
 		scoreKind: info.scoreKind,
+		capabilities: info.capabilities,
 		version: info.version,
 	};
 }
 
-async function detect(text: string): Promise<NativeLanguageHypothesis[]> {
+/**
+ * `options` đi thẳng xuống facade, không lọc không sửa: renderer là nơi quyết
+ * định truyền gì, và zlang đã tự reject khi backend không hỗ trợ.
+ */
+async function detect(options: NativeDetectOptions): Promise<NativeDetection> {
 	const module = nativeModule();
 	if (!module) throw new Error('nativelibs/zlang không nạp được');
 
-	// zlang trả về đúng hình dạng { detectedLanguage, confidence } nên không cần map.
-	return module.detect({ text: text });
+	return module.detect(options);
 }
 
 /**
@@ -112,10 +125,11 @@ export function registerNativeDetectHandlers(ipcMain: IpcMain): void {
 		return status();
 	});
 
-	ipcMain.handle(IPC.nativeDetect, function (_event, text: string): Promise<
-		NativeLanguageHypothesis[]
-	> {
-		return detect(text);
+	ipcMain.handle(IPC.nativeDetect, function (
+		_event,
+		options: NativeDetectOptions
+	): Promise<NativeDetection> {
+		return detect(options);
 	});
 
 	ipcMain.handle(IPC.nativeDetectRaw, function (): NativeRawSnapshot {

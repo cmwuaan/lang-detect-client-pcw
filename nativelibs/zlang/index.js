@@ -11,7 +11,16 @@
  * tra, không regex — cái gì OS không cung cấp thì trả `null` chứ không suy ra.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.info = exports.detect = exports.availability = void 0;
+exports.info = exports.detect = exports.capabilities = exports.availability = void 0;
+/** Không nạp được native thì không có option nào dùng được. */
+const NO_CAPABILITIES = {
+    constraints: false,
+    hints: false,
+    dominant: false,
+    inputLanguage: false,
+    inputScript: false,
+    startIndex: false,
+};
 var ZLangDetectorPlatformSupport;
 (function (ZLangDetectorPlatformSupport) {
     // MacOS
@@ -103,11 +112,13 @@ function info() {
     let backend = 'none';
     let scoreKind = 'none';
     let version = null;
+    let capabilities = NO_CAPABILITIES;
     if (nativeBinding) {
         try {
             backend = nativeBinding.backend();
             scoreKind = nativeBinding.scores();
             version = nativeBinding.version();
+            capabilities = nativeBinding.capabilities();
         }
         catch (_a) {
             // Nạp được nhưng gọi lỗi: giữ mặc định, lý do đã có ở loadError.
@@ -116,23 +127,31 @@ function info() {
     return {
         backend: backend,
         scoreKind: scoreKind,
+        capabilities: capabilities,
         version: version,
         platform: platform,
         loadError: loadError ? loadError.message : null,
     };
 }
 exports.info = info;
+/** `{ vi: 0.9 }` -> `[{ tag: 'vi', weight: 0.9 }]` cho bề mặt napi. */
+function toHintList(hints) {
+    return Object.keys(hints).map(function (tag) {
+        return { tag: tag, weight: hints[tag] };
+    });
+}
 /**
- * Nhận diện ngôn ngữ của `text`.
+ * Nhận diện ngôn ngữ của `text`, có thể kèm option điều khiển kết quả.
  *
- * - Trả về mảng đã sắp giảm dần theo mức độ khả năng — kể cả khi `confidence`
+ * - `hypotheses` đã sắp giảm dần theo mức độ khả năng — kể cả khi `confidence`
  * là null, thứ tự vẫn do OS quyết định và vẫn đúng.
  * - Mảng rỗng khi văn bản quá ngắn hoặc không kết luận được — đó là kết quả
  * hợp lệ, không phải lỗi.
- * - Chỉ reject khi backend không dùng được hoặc native báo lỗi thật.
+ * - Reject khi backend không dùng được, khi native báo lỗi thật, hoặc khi
+ * truyền option mà backend không hỗ trợ (xem `info().capabilities`).
  */
 function detect(props) {
-    const { text } = props;
+    const { text, maxResults, constraints, hints, inputLanguage, inputScript, startIndex } = props;
     const reason = getUnavailableReason();
     if (reason) {
         return Promise.reject(new Error(`zlang: cannot detect (${reason})`));
@@ -141,15 +160,33 @@ function detect(props) {
     // trả 'native-binding-missing' cho mọi trường hợp `nativeBinding` là null.
     // Khẳng định kiểu ở đây thay cho một lần kiểm tra không bao giờ đúng.
     const binding = nativeBinding;
-    return binding.detect(text).then(function (raw) {
-        const results = [];
-        for (let i = 0; i < raw.length; i++) {
+    return binding
+        .detect(text, {
+        // undefined ở đây nghĩa là "không truyền" — native sẽ để OS tự quyết.
+        maxResults: maxResults,
+        constraints: constraints,
+        hints: hints ? toHintList(hints) : undefined,
+        inputLanguage: inputLanguage,
+        inputScript: inputScript,
+        startIndex: startIndex,
+    })
+        .then(function (raw) {
+        const hypotheses = [];
+        for (let i = 0; i < raw.hypotheses.length; i++) {
             // `== null` bắt cả null lẫn undefined: napi có thể bỏ hẳn field khi
             // phía Rust là None, tuỳ phiên bản. Chuẩn hoá về đúng một giá trị.
-            const confidence = raw[i].confidence == null ? null : raw[i].confidence;
-            results.push({ detectedLanguage: raw[i].tag, confidence: confidence });
+            const confidence = raw.hypotheses[i].confidence == null ? null : raw.hypotheses[i].confidence;
+            hypotheses.push({ detectedLanguage: raw.hypotheses[i].tag, confidence: confidence });
         }
-        return results;
+        return {
+            hypotheses: hypotheses,
+            dominantLanguage: raw.dominant == null ? null : raw.dominant,
+        };
     });
 }
 exports.detect = detect;
+/** Ngắn gọn cho `info().capabilities` — hỏi trước khi truyền option. */
+function capabilities() {
+    return info().capabilities;
+}
+exports.capabilities = capabilities;

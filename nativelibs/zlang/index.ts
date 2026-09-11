@@ -51,6 +51,109 @@ export interface ZLangDetectorHypothesis {
 	confidence: number | null;
 }
 
+/**
+ * Option nào backend hiện tại thật sự hiểu.
+ *
+ * HỎI TRƯỚC KHI TRUYỀN: backend không hiểu thì `detect()` **reject**, không bỏ
+ * qua im lặng — đặt constraint rồi tưởng nó có hiệu lực là lỗi nguy hiểm hơn
+ * nhiều so với một lỗi rõ ràng.
+ *
+ * macOS (`apple-nl`) hỗ trợ cả ba; Windows (`windows-els`) không hỗ trợ cái nào
+ * — ELS chỉ nhận văn bản.
+ */
+export interface ZLangDetectorCapabilities {
+	/** Truyền được `constraints` không. (macOS) */
+	constraints: boolean;
+	/** Truyền được `hints` không. (macOS) */
+	hints: boolean;
+	/** Kết quả có `dominantLanguage` không. (macOS) */
+	dominant: boolean;
+	/** Truyền được `inputLanguage` không. (Windows/ELS) */
+	inputLanguage: boolean;
+	/** Truyền được `inputScript` không. (Windows/ELS) */
+	inputScript: boolean;
+	/** Truyền được `startIndex` không. (Windows/ELS) */
+	startIndex: boolean;
+}
+
+/**
+ * Option điều khiển kết quả — ánh xạ thẳng sang API của OS, không thêm tầng
+ * diễn giải nào.
+ *
+ * **Không truyền field nào thì OS giữ mặc định của chính nó.** Module không tự
+ * đặt ra giá trị mặc định: không truyền `constraints` thì `languageConstraints`
+ * không bị đụng tới, không truyền `inputLanguage` thì `pszInputLanguage` là NULL.
+ *
+ * Hai nhóm option dưới đây KHÔNG thay thế cho nhau — xem `capabilities()`.
+ */
+export interface ZLangDetectOptions {
+	/** Văn bản cần nhận diện, UTF-8. */
+	text: string;
+	/**
+	 * Số giả thuyết tối đa, chặn trong `1..16`.
+	 * → `languageHypotheses(withMaximum:)` (macOS) / cắt danh sách ELS (Windows)
+	 *
+	 * Không truyền = xin tối đa sức chứa (16), không phải một con số do module
+	 * tự chọn.
+	 */
+	maxResults?: number;
+
+	/* --- macOS: Apple NaturalLanguage --- */
+
+	/**
+	 * Chỉ xét các thẻ BCP 47 này. → `NLLanguageRecognizer.languageConstraints`
+	 *
+	 * Lưu ý Apple coi đây là **ràng buộc mềm**: kết quả vẫn có thể chứa ngôn ngữ
+	 * ngoài danh sách, nhưng với confidence bằng 0.
+	 */
+	constraints?: string[];
+	/**
+	 * Prior của caller: thẻ BCP 47 -> trọng số.
+	 * → `NLLanguageRecognizer.languageHints`
+	 *
+	 * Ví dụ `{ vi: 0.9, en: 0.1 }` khi đã biết hội thoại chủ yếu là Việt/Anh.
+	 */
+	hints?: { [tag: string]: number };
+
+	/* --- Windows: Extended Linguistic Services --- */
+
+	/**
+	 * Thẻ IETF giới hạn ngôn ngữ đầu vào.
+	 * → `MAPPING_ENUM_OPTIONS.pszInputLanguage`
+	 *
+	 * **KHÔNG phải `constraints` của Apple.** Nó lọc ở bước *chọn dịch vụ* —
+	 * "chỉ dùng engine nào nhận được đầu vào này" — chứ không lọc kết quả trả về.
+	 */
+	inputLanguage?: string;
+	/**
+	 * Giới hạn theo hệ chữ viết đầu vào, dùng khi biết trước văn bản chỉ thuộc
+	 * một script. → `MAPPING_ENUM_OPTIONS.pszInputScript`. Cũng lọc dịch vụ.
+	 */
+	inputScript?: string;
+	/**
+	 * Vị trí ký tự bắt đầu đọc trong văn bản (tính theo ký tự UTF-16).
+	 * → `MappingRecognizeText.dwIndex`
+	 *
+	 * macOS không có tham số tương đương — `processString()` luôn đọc cả chuỗi.
+	 * Cần hành vi này trên macOS thì tự cắt chuỗi trước khi gọi.
+	 */
+	startIndex?: number;
+}
+
+/** Kết quả một lần `detect()`. */
+export interface ZLangDetection {
+	/** Đã sắp giảm dần theo mức độ khả năng. Rỗng khi không kết luận được. */
+	hypotheses: ZLangDetectorHypothesis[];
+	/**
+	 * `NLLanguageRecognizer.dominantLanguage` — ngôn ngữ trội do model tự chọn.
+	 *
+	 * `null` khi backend không có khái niệm đó (Windows/ELS) hoặc model không
+	 * kết luận được. Không phải lúc nào cũng trùng `hypotheses[0]`: Apple tính
+	 * hai thứ này độc lập.
+	 */
+	dominantLanguage: string | null;
+}
+
 // Thông tin chẩn đoán, support cho log
 export interface ZLangDetectorInfo {
 	/**
@@ -61,12 +164,24 @@ export interface ZLangDetectorInfo {
 	 **/
 	backend: string;
 	scoreKind: ZLangDetectorScoreKind;
+	/** Option nào truyền được vào `detect()` trên nền tảng này. */
+	capabilities: ZLangDetectorCapabilities;
 	// Version của native binding; null khi không nạp được.
 	version: string | null;
 	// `${process.platform}-${process.arch}`
 	platform: string;
 	loadError: string | null;
 }
+
+/** Không nạp được native thì không có option nào dùng được. */
+const NO_CAPABILITIES: ZLangDetectorCapabilities = {
+	constraints: false,
+	hints: false,
+	dominant: false,
+	inputLanguage: false,
+	inputScript: false,
+	startIndex: false,
+};
 
 enum ZLangDetectorPlatformSupport {
 	// MacOS
@@ -77,15 +192,29 @@ enum ZLangDetectorPlatformSupport {
 	WIN32_X64 = 'win32-x64',
 }
 
-// Hình dạng thô của .node — khớp bề mặt napi sẽ thêm ở src/lib.rs.
+// Hình dạng thô của .node — khớp bề mặt napi ở src/lib.rs.
 interface NativeBinding {
 	available(): boolean;
 	backend(): string;
 	version(): string;
 	scores(): string;
-	// `confidence` là null/undefined khi backend không cho điểm — xem
-	// ZLangDetectorHypothesis.confidence.
-	detect(text: string): Promise<Array<{ tag: string; confidence: number | null }>>;
+	capabilities(): ZLangDetectorCapabilities;
+	detect(
+		text: string,
+		options?: {
+			maxResults?: number;
+			constraints?: string[];
+			hints?: Array<{ tag: string; weight: number }>;
+			inputLanguage?: string;
+			inputScript?: string;
+			startIndex?: number;
+		}
+	): Promise<{
+		// `confidence` là null/undefined khi backend không cho điểm — xem
+		// ZLangDetectorHypothesis.confidence.
+		hypotheses: Array<{ tag: string; confidence: number | null }>;
+		dominant?: string | null;
+	}>;
 }
 
 let nativeBinding: NativeBinding | null = null;
@@ -175,12 +304,14 @@ function info(): ZLangDetectorInfo {
 	let backend = 'none';
 	let scoreKind: ZLangDetectorScoreKind = 'none';
 	let version: string | null = null;
+	let capabilities: ZLangDetectorCapabilities = NO_CAPABILITIES;
 
 	if (nativeBinding) {
 		try {
 			backend = nativeBinding.backend();
 			scoreKind = nativeBinding.scores() as ZLangDetectorScoreKind;
 			version = nativeBinding.version();
+			capabilities = nativeBinding.capabilities();
 		} catch {
 			// Nạp được nhưng gọi lỗi: giữ mặc định, lý do đã có ở loadError.
 		}
@@ -189,23 +320,32 @@ function info(): ZLangDetectorInfo {
 	return {
 		backend: backend,
 		scoreKind: scoreKind,
+		capabilities: capabilities,
 		version: version,
 		platform: platform,
 		loadError: loadError ? loadError.message : null,
 	};
 }
 
+/** `{ vi: 0.9 }` -> `[{ tag: 'vi', weight: 0.9 }]` cho bề mặt napi. */
+function toHintList(hints: { [tag: string]: number }): Array<{ tag: string; weight: number }> {
+	return Object.keys(hints).map(function (tag) {
+		return { tag: tag, weight: hints[tag] };
+	});
+}
+
 /**
- * Nhận diện ngôn ngữ của `text`.
+ * Nhận diện ngôn ngữ của `text`, có thể kèm option điều khiển kết quả.
  *
- * - Trả về mảng đã sắp giảm dần theo mức độ khả năng — kể cả khi `confidence`
+ * - `hypotheses` đã sắp giảm dần theo mức độ khả năng — kể cả khi `confidence`
  * là null, thứ tự vẫn do OS quyết định và vẫn đúng.
  * - Mảng rỗng khi văn bản quá ngắn hoặc không kết luận được — đó là kết quả
  * hợp lệ, không phải lỗi.
- * - Chỉ reject khi backend không dùng được hoặc native báo lỗi thật.
+ * - Reject khi backend không dùng được, khi native báo lỗi thật, hoặc khi
+ * truyền option mà backend không hỗ trợ (xem `info().capabilities`).
  */
-function detect(props: { text: string }): Promise<ZLangDetectorHypothesis[]> {
-	const { text } = props;
+function detect(props: ZLangDetectOptions): Promise<ZLangDetection> {
+	const { text, maxResults, constraints, hints, inputLanguage, inputScript, startIndex } = props;
 
 	const reason = getUnavailableReason();
 
@@ -218,18 +358,37 @@ function detect(props: { text: string }): Promise<ZLangDetectorHypothesis[]> {
 	// Khẳng định kiểu ở đây thay cho một lần kiểm tra không bao giờ đúng.
 	const binding = nativeBinding as NativeBinding;
 
-	return binding.detect(text).then(function (raw) {
-		const results: ZLangDetectorHypothesis[] = [];
+	return binding
+		.detect(text, {
+			// undefined ở đây nghĩa là "không truyền" — native sẽ để OS tự quyết.
+			maxResults: maxResults,
+			constraints: constraints,
+			hints: hints ? toHintList(hints) : undefined,
+			inputLanguage: inputLanguage,
+			inputScript: inputScript,
+			startIndex: startIndex,
+		})
+		.then(function (raw) {
+			const hypotheses: ZLangDetectorHypothesis[] = [];
 
-		for (let i = 0; i < raw.length; i++) {
-			// `== null` bắt cả null lẫn undefined: napi có thể bỏ hẳn field khi
-			// phía Rust là None, tuỳ phiên bản. Chuẩn hoá về đúng một giá trị.
-			const confidence = raw[i].confidence == null ? null : raw[i].confidence;
-			results.push({ detectedLanguage: raw[i].tag, confidence: confidence });
-		}
+			for (let i = 0; i < raw.hypotheses.length; i++) {
+				// `== null` bắt cả null lẫn undefined: napi có thể bỏ hẳn field khi
+				// phía Rust là None, tuỳ phiên bản. Chuẩn hoá về đúng một giá trị.
+				const confidence =
+					raw.hypotheses[i].confidence == null ? null : raw.hypotheses[i].confidence;
+				hypotheses.push({ detectedLanguage: raw.hypotheses[i].tag, confidence: confidence });
+			}
 
-		return results;
-	});
+			return {
+				hypotheses: hypotheses,
+				dominantLanguage: raw.dominant == null ? null : raw.dominant,
+			};
+		});
 }
 
-export { availability, detect, info };
+/** Ngắn gọn cho `info().capabilities` — hỏi trước khi truyền option. */
+function capabilities(): ZLangDetectorCapabilities {
+	return info().capabilities;
+}
+
+export { availability, capabilities, detect, info };

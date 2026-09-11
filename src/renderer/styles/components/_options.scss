@@ -1,0 +1,41 @@
+@use '../abstracts' as a;
+
+/// Bảng tuỳ chọn native. Mỗi hàng là một property của NLLanguageRecognizer.
+.options {
+  display: grid;
+  gap: a.space(4);
+}
+
+/// Tách nhóm theo nền tảng: hai bộ option không thay thế nhau, nên đừng để
+/// người đọc tưởng chúng là một danh sách phẳng.
+.options__group {
+  @include a.eyebrow;
+  margin: a.space(2) 0 0;
+  padding-top: a.space(3);
+  border-top: 1px solid var(--hairline);
+}
+
+/// Cùng ngôn ngữ hình thức với .textarea, chỉ khác chiều cao — đây vẫn là ô nhập.
+.input {
+  @include a.focus-ring;
+  width: 100%;
+  padding: a.space(2) a.space(3);
+  background: var(--plane);
+  color: var(--ink);
+  border: 1px solid var(--baseline);
+  border-radius: a.radius(md);
+  font-family: a.$font-mono;
+  font-size: a.font-size(sm);
+  line-height: 1.6;
+
+  &::placeholder { color: var(--ink-muted); }
+  &:hover:not(:disabled) { border-color: var(--ink-muted); }
+
+  /// Ô bị khoá = backend không hỗ trợ option đó. Phải nhìn ra ngay là không gõ
+  /// được, chứ không phải "gõ vào mà chẳng thấy gì đổi".
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    border-style: dashed;
+  }
+}

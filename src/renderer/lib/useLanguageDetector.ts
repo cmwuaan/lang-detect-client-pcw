@@ -5,6 +5,7 @@ import {
 	DownloadProgressEvent,
 	LanguageDetector,
 	LanguageDetectorProvider,
+	NativeDetectorOptions,
 } from '../services/detection/LanguageDetector';
 
 export interface LanguageDetectorState {
@@ -67,7 +68,12 @@ function toRatio(event: DownloadProgressEvent): number | null {
  * KHÔNG thể gọi lúc mount. Hook chỉ tự tạo session khi availability đã là
  * 'available'; các trạng thái còn lại phải chờ người dùng bấm (requestCreate).
  */
-export function useLanguageDetector(provider: LanguageDetectorProvider): LanguageDetectorState {
+export function useLanguageDetector(
+	provider: LanguageDetectorProvider,
+	nativeOptions: NativeDetectorOptions
+): LanguageDetectorState {
+	// Phụ thuộc bản JSON chứ không phải object: caller dựng object mới mỗi render.
+	const nativeKey = JSON.stringify(nativeOptions);
 	const [availability, setAvailability] = React.useState<AvailabilityStatus | null>(null);
 	const [detector, setDetector] = React.useState<LanguageDetector | null>(null);
 	const [progress, setProgress] = React.useState<number | null>(null);
@@ -121,6 +127,7 @@ export function useLanguageDetector(provider: LanguageDetectorProvider): Languag
 								if (alive) setProgress(toRatio(event));
 							});
 						},
+						native: JSON.parse(nativeKey) as NativeDetectorOptions,
 					})
 					.then(
 						function (created) {
@@ -142,11 +149,12 @@ export function useLanguageDetector(provider: LanguageDetectorProvider): Languag
 
 			return function () {
 				alive = false;
-				// Session cũ phải đóng khi đổi provider hoặc tạo lại.
+				// Session cũ phải đóng khi đổi provider, đổi option, hoặc tạo lại.
 				if (session) session.destroy();
 			};
 		},
-		[provider, availability, createAttempt]
+		// nativeKey: đổi option native -> dựng lại session để option có hiệu lực.
+		[provider, availability, createAttempt, nativeKey]
 	);
 
 	const requestCreate = React.useCallback(function () {

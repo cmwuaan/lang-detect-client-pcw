@@ -7,7 +7,10 @@
  * hợp đồng thật của nativelibs, lệch một field là log raw nói dối.
  */
 import type {
+	ZLangDetection,
 	ZLangDetectionAvailability,
+	ZLangDetectOptions,
+	ZLangDetectorCapabilities,
 	ZLangDetectorHypothesis,
 	ZLangDetectorInfo,
 } from '../../nativelibs/zlang';
@@ -36,6 +39,21 @@ export interface AppInfo {
 export type NativeLanguageHypothesis = ZLangDetectorHypothesis;
 
 /**
+ * Option điều khiển kết quả, chuyển thẳng xuống `NLLanguageRecognizer` —
+ * `constraints`, `hints`, `maxResults`. Main process không diễn giải gì.
+ *
+ * Backend không hỗ trợ thì `detect()` **reject**; hỏi `NativeDetectStatus.capabilities`
+ * trước khi truyền.
+ */
+export type NativeDetectOptions = ZLangDetectOptions;
+
+/** Kết quả detect: danh sách giả thuyết + `dominantLanguage` của Apple. */
+export type NativeDetection = ZLangDetection;
+
+/** Option nào backend hiện tại thật sự hiểu. */
+export type NativeCapabilities = ZLangDetectorCapabilities;
+
+/**
  * Kết quả THÔ của facade `nativelibs/zlang`, đúng như ba hàm của nó trả về.
  *
  * Khác `NativeDetectStatus` ở chỗ: status là bản đã gộp/diễn giải cho UI, còn
@@ -60,6 +78,8 @@ export interface NativeDetectStatus {
 	backend: string;
 	/** 'probability' — xác suất của model; 'rank' — chỉ có thứ hạng, confidence là null. */
 	scoreKind: string;
+	/** Option nào truyền được vào `detect()` trên nền tảng này. */
+	capabilities: NativeCapabilities;
 	version: string | null;
 }
 
@@ -75,8 +95,11 @@ export interface ElectronAPI {
 	/** Nhận diện ngôn ngữ bằng model của hệ điều hành (nativelibs/zlang). */
 	nativeDetect: {
 		status(): Promise<NativeDetectStatus>;
-		/** Kết quả thô của `zlang.detect()` — chưa qua adapter Web API nào. */
-		detect(text: string): Promise<NativeLanguageHypothesis[]>;
+		/**
+		 * Kết quả thô của `zlang.detect()` — chưa qua adapter Web API nào.
+		 * `options` đi thẳng xuống `NLLanguageRecognizer`.
+		 */
+		detect(options: NativeDetectOptions): Promise<NativeDetection>;
 		/** `zlang.info()` + `zlang.availability()` nguyên trạng. Reject nếu không nạp được module. */
 		raw(): Promise<NativeRawSnapshot>;
 	};

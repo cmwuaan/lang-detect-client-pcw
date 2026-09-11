@@ -1,9 +1,17 @@
 import * as React from 'react';
 
 import { ActiveMethod } from './components/ActiveMethod';
+import { NativeOptions, NativeOptionText } from './components/NativeOptions';
 import { NativeRawLog } from './components/NativeRawLog';
 import { SampleChips } from './components/SampleChips';
 import { languageName } from './lib/languageName';
+import {
+	parseHints,
+	parseMaxResults,
+	parseStartIndex,
+	parseTagList,
+	parseText,
+} from './lib/nativeOptionText';
 import { SAMPLES } from './lib/samples';
 import { useDebouncedValue } from './lib/useDebouncedValue';
 import { useLanguageDetector } from './lib/useLanguageDetector';
@@ -11,6 +19,7 @@ import { useNativeRaw } from './lib/useNativeRaw';
 import {
 	LanguageDetectionResult,
 	LanguageDetectorProvider,
+	NativeDetectorOptions,
 	UNDETERMINED_LANGUAGE,
 } from './services/detection/LanguageDetector';
 import { IPlatformService, PlatformInfo } from './services/platform/IPlatformService';
@@ -30,6 +39,15 @@ export function App(props: AppProps): JSX.Element {
 	const [text, setText] = React.useState<string>(SAMPLES[0].text);
 	const [info, setInfo] = React.useState<PlatformInfo | null>(null);
 	const [results, setResults] = React.useState<LanguageDetectionResult[] | null>(null);
+	// Tất cả rỗng = không truyền option nào; native để OS giữ mặc định của nó.
+	const [optionText, setOptionText] = React.useState<NativeOptionText>({
+		maxResults: '',
+		constraints: '',
+		hints: '',
+		inputLanguage: '',
+		inputScript: '',
+		startIndex: '',
+	});
 
 	React.useEffect(
 		function () {
@@ -44,8 +62,31 @@ export function App(props: AppProps): JSX.Element {
 		[platform]
 	);
 
+	/*
+	 * Option gõ dở được chuyển sang hình dạng native ngay mỗi render. Rẻ, và nhờ
+	 * vậy cả kết quả hiển thị lẫn panel log raw đều dùng CÙNG một bộ option —
+	 * không có chuyện hai bên chạy hai cấu hình khác nhau.
+	 */
+	const nativeOptions = React.useMemo(
+		function (): NativeDetectorOptions {
+			const constraints = parseTagList(optionText.constraints);
+			const hints = parseHints(optionText.hints);
+			// undefined ở mọi field = không truyền gì cả, không phải "truyền giá
+			// trị mặc định". Ô trống thì OS giữ hành vi gốc của nó.
+			return {
+				maxResults: parseMaxResults(optionText.maxResults),
+				constraints: constraints.length > 0 ? constraints : undefined,
+				hints: Object.keys(hints).length > 0 ? hints : undefined,
+				inputLanguage: parseText(optionText.inputLanguage),
+				inputScript: parseText(optionText.inputScript),
+				startIndex: parseStartIndex(optionText.startIndex),
+			};
+		},
+		[optionText]
+	);
+
 	// Hook lo vòng đời session: availability, transient activation, tiến độ tải.
-	const state = useLanguageDetector(provider);
+	const state = useLanguageDetector(provider, nativeOptions);
 	const detector = state.detector;
 
 	// Session mới -> kết quả cũ không còn ý nghĩa.
@@ -58,8 +99,8 @@ export function App(props: AppProps): JSX.Element {
 
 	const detectText = useDebouncedValue(text, DETECT_DEBOUNCE_MS);
 
-	// Log raw dùng cùng văn bản đã debounce để hai phần không lệch nhau.
-	const raw = useNativeRaw(detectText);
+	// Log raw dùng cùng văn bản đã debounce và cùng option để hai phần không lệch nhau.
+	const raw = useNativeRaw(detectText, nativeOptions);
 
 	React.useEffect(
 		function () {
@@ -170,6 +211,21 @@ export function App(props: AppProps): JSX.Element {
 
 				{state.error ? <p className="field__hint">{state.error}</p> : null}
 			</section>
+
+			{raw.hasBridge ? (
+				<section className="card">
+					<h2 className="card__title">Tuỳ chọn native</h2>
+					<p className="field__hint">
+						Truyền thẳng xuống <code>NLLanguageRecognizer</code>. Đổi giá trị là cả kết
+						quả ở trên lẫn log raw bên dưới chạy lại ngay.
+					</p>
+					<NativeOptions
+						value={optionText}
+						onChange={setOptionText}
+						capabilities={raw.info.value ? raw.info.value.capabilities : null}
+					/>
+				</section>
+			) : null}
 
 			<section className="card">
 				<h2 className="card__title">Kết quả thô từ native</h2>

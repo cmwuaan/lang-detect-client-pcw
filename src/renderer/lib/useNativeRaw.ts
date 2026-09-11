@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import { NativeLanguageHypothesis, NativeRawSnapshot } from '@shared/ipc';
+import { NativeDetection, NativeRawSnapshot } from '@shared/ipc';
+
+import { NativeDetectorOptions } from '../services/detection/LanguageDetector';
 
 /** Một lời gọi facade: hoặc có giá trị, hoặc có lỗi — không bao giờ cả hai. */
 export interface RawCall<T> {
@@ -16,8 +18,8 @@ export interface NativeRawState {
 	info: RawCall<NativeRawSnapshot['info']>;
 	/** `zlang.availability()` */
 	availability: RawCall<NativeRawSnapshot['availability']>;
-	/** `zlang.detect({ text })` */
-	detect: RawCall<NativeLanguageHypothesis[]>;
+	/** `zlang.detect({ text, ...options })` */
+	detect: RawCall<NativeDetection>;
 }
 
 function idle<T>(): RawCall<T> {
@@ -40,13 +42,18 @@ function messageOf(err: unknown): string {
  *
  * `info` và `availability` chỉ đọc một lần: cả hai được cache trong facade
  * (availability hỏi OS đúng một lần rồi nhớ), gọi lại cũng ra cùng giá trị.
+ *
+ * `options` đi thẳng xuống native. Effect phụ thuộc bản JSON của nó chứ không
+ * phải chính object: caller dựng object mới mỗi lần render, so sánh tham chiếu
+ * sẽ gọi lại native ở MỌI render.
  */
-export function useNativeRaw(text: string): NativeRawState {
+export function useNativeRaw(text: string, options: NativeDetectorOptions): NativeRawState {
 	const api = window.electronAPI ? window.electronAPI.nativeDetect : undefined;
 	const hasBridge = !!api;
+	const optionsKey = JSON.stringify(options);
 
 	const [snapshot, setSnapshot] = React.useState<RawCall<NativeRawSnapshot>>(idle);
-	const [detect, setDetect] = React.useState<RawCall<NativeLanguageHypothesis[]>>(idle);
+	const [detect, setDetect] = React.useState<RawCall<NativeDetection>>(idle);
 
 	React.useEffect(
 		function () {
@@ -80,20 +87,32 @@ export function useNativeRaw(text: string): NativeRawState {
 				return { value: prev.value, error: null, pending: true };
 			});
 
-			api.detect(text).then(
-				function (value) {
-					if (alive) setDetect({ value: value, error: null, pending: false });
-				},
-				function (err) {
-					if (alive) setDetect({ value: null, error: messageOf(err), pending: false });
-				}
-			);
+			const parsed = JSON.parse(optionsKey) as NativeDetectorOptions;
+
+			api
+				.detect({
+					text: text,
+					maxResults: parsed.maxResults,
+					constraints: parsed.constraints,
+					hints: parsed.hints,
+					inputLanguage: parsed.inputLanguage,
+					inputScript: parsed.inputScript,
+					startIndex: parsed.startIndex,
+				})
+				.then(
+					function (value) {
+						if (alive) setDetect({ value: value, error: null, pending: false });
+					},
+					function (err) {
+						if (alive) setDetect({ value: null, error: messageOf(err), pending: false });
+					}
+				);
 
 			return function () {
 				alive = false;
 			};
 		},
-		[api, text]
+		[api, text, optionsKey]
 	);
 
 	return {

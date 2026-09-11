@@ -37,12 +37,43 @@ export interface CreateMonitor {
   ): void;
 }
 
+/**
+ * Option riêng của backend native, KHÔNG có trong Web API.
+ *
+ * Đây là phần mở rộng có chủ ý: hợp đồng của repo là **superset** của Web API.
+ * `BrowserDetectorProvider` chuyển nguyên object sang API thật của trình duyệt,
+ * và trình duyệt bỏ qua field lạ — nên việc thêm field ở đây không phá tính chất
+ * "cắm thẳng vào, không cần adapter".
+ *
+ * Chỉ `NativeDetectorProvider` đọc tới nó.
+ */
+export interface NativeDetectorOptions {
+  /** 1..16. Không truyền = để native xin tối đa, không có mặc định do app đặt. */
+  maxResults?: number;
+
+  /* macOS — Apple NaturalLanguage */
+  /** `NLLanguageRecognizer.languageConstraints` — chỉ xét các thẻ BCP 47 này. */
+  constraints?: string[];
+  /** `NLLanguageRecognizer.languageHints` — prior, thẻ BCP 47 -> trọng số. */
+  hints?: { [tag: string]: number };
+
+  /* Windows — Extended Linguistic Services */
+  /** `MAPPING_ENUM_OPTIONS.pszInputLanguage` — lọc DỊCH VỤ, không lọc kết quả. */
+  inputLanguage?: string;
+  /** `MAPPING_ENUM_OPTIONS.pszInputScript` — cũng lọc dịch vụ. */
+  inputScript?: string;
+  /** `MappingRecognizeText.dwIndex` — ký tự bắt đầu đọc. */
+  startIndex?: number;
+}
+
 export interface LanguageDetectorCreateOptions {
   /** Thẻ BCP 47 mà caller dự kiến sẽ gặp, ví dụ ['en-US', 'vi']. */
   expectedInputLanguages?: string[];
   signal?: AbortSignal;
   /** Theo dõi tiến độ tải model; chỉ có ý nghĩa khi availability là downloadable. */
   monitor?: (monitor: CreateMonitor) => void;
+  /** Mở rộng ngoài Web API — xem NativeDetectorOptions. */
+  native?: NativeDetectorOptions;
 }
 
 export interface LanguageDetectorDetectOptions {

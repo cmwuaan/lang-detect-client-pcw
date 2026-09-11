@@ -4,8 +4,9 @@ import {
 	AppInfo,
 	ElectronAPI,
 	IPC,
+	NativeDetection,
+	NativeDetectOptions,
 	NativeDetectStatus,
-	NativeLanguageHypothesis,
 	NativeRawSnapshot,
 } from '@shared/ipc';
 
@@ -18,8 +19,8 @@ const api: ElectronAPI = {
 		status: function (): Promise<NativeDetectStatus> {
 			return ipcRenderer.invoke(IPC.nativeDetectStatus) as Promise<NativeDetectStatus>;
 		},
-		detect: function (text: string): Promise<NativeLanguageHypothesis[]> {
-			return ipcRenderer.invoke(IPC.nativeDetect, text) as Promise<NativeLanguageHypothesis[]>;
+		detect: function (options: NativeDetectOptions): Promise<NativeDetection> {
+			return ipcRenderer.invoke(IPC.nativeDetect, options) as Promise<NativeDetection>;
 		},
 		raw: function (): Promise<NativeRawSnapshot> {
 			return ipcRenderer.invoke(IPC.nativeDetectRaw) as Promise<NativeRawSnapshot>;
