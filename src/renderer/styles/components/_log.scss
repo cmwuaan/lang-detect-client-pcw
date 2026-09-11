@@ -4,29 +4,8 @@
 /// giữ nguyên xuống dòng của JSON và cho cuộn ngang thay vì ngắt dòng bừa.
 .log {
   display: grid;
-  gap: a.space(4);
+  gap: a.space(3);
 }
-
-.log__head {
-  display: flex;
-  align-items: baseline;
-  gap: a.space(2);
-  margin-bottom: a.space(2);
-}
-
-/// Chữ ký hàm — giữ nguyên hoa/thường vì nó là code, không phải nhãn.
-.log__signature {
-  font-family: a.$font-mono;
-  font-size: a.font-size(sm);
-  font-weight: a.weight(semibold);
-  color: var(--ink);
-}
-
-.log__badge { @include a.eyebrow; }
-
-/// Không có token màu "danger" trong hệ thống này (cả bảng màu là một hue).
-/// Dùng độ đậm của mực để đánh dấu thay vì bịa thêm một màu mới.
-.log__badge--error { color: var(--ink); }
 
 .log__body {
   margin: 0;
@@ -41,7 +20,7 @@
   // JSON dài không được đẩy rộng cả trang: cuộn trong khối này thôi.
   white-space: pre;
   overflow-x: auto;
-  // Chặn chiều cao để panel không đẩy phần dưới đi quá xa.
-  max-height: 18rem;
+  // Chặn chiều cao để panel không đẩy phần dưới ra khỏi tầm nhìn.
+  max-height: 15rem;
   overflow-y: auto;
 }

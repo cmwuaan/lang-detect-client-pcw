@@ -18,7 +18,10 @@
 		"pack:win:only": "node scripts/pack-win.js",
 		"zlang": "npm-run-all zlang:node zlang:types",
 		"zlang:node": "node nativelibs/zlang/scripts/build-node.js",
-		"zlang:types": "tsc -p nativelibs/zlang/tsconfig.json"
+		"zlang:types": "tsc -p nativelibs/zlang/tsconfig.json",
+		"zdetect": "node weblibs/zdetect/scripts/build.js && tsc -p weblibs/zdetect/tsconfig.json",
+		"zdetect:test": "node weblibs/zdetect/scripts/run-ts.js scripts/test.ts",
+		"zdetect:train": "node weblibs/zdetect/scripts/run-ts.js scripts/train.ts"
 	},
 	"keywords": [
 		"language detector"

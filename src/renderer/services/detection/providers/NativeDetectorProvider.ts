@@ -16,10 +16,10 @@ import {
  *   macOS   — Apple NaturalLanguage (NLLanguageRecognizer)
  *   Windows — Extended Linguistic Services, "Microsoft Language Detection"
  *
- * Vì sao cần đến nó khi đã có BrowserDetectorProvider: Web API LanguageDetector
- * đòi Chromium >= 138, còn Electron 22 (bản mà zalo-pc-app đang dùng) là
- * Chromium 108 — trên desktop global đó KHÔNG tồn tại. Model của OS thì luôn có,
- * không phải tải, không cần mạng.
+ * Vì sao desktop KHÔNG dùng zdetect như bản web: model của hệ điều hành được
+ * Apple/Microsoft huấn luyện trên dữ liệu lớn hơn nhiều lần corpus của repo, và
+ * nó có sẵn trong máy nên không tốn byte nào trong bundle. Có native thì dùng
+ * native.
  *
  * Lớp này không có thuật toán nào: nó gọi qua preload bridge sang main process,
  * và dịch kết quả sang hợp đồng Web API mà UI đang dùng.
@@ -27,7 +27,7 @@ import {
 @singleton()
 export class NativeDetectorProvider implements LanguageDetectorProvider {
 	public readonly id = 'native';
-	public readonly label = 'Model của hệ điều hành';
+	public readonly label = 'Operating system model';
 
 	/** Trạng thái lần hỏi gần nhất, để mô tả cho người dùng biết backend nào đang chạy. */
 	private lastStatus: NativeDetectStatus | null = null;
@@ -37,16 +37,16 @@ export class NativeDetectorProvider implements LanguageDetectorProvider {
 	 * rõ backend thật (apple-nl / windows-els) mà không phải sửa UI.
 	 */
 	public get description(): string {
-		const base = 'Model sẵn có trong hệ điều hành, không phải tải. Chỉ chạy ở bản desktop.';
-		if (!this.api) return base + ' Bản web không có bridge sang native.';
+		const base = 'Model built into the OS, nothing to download. Desktop build only.';
+		if (!this.api) return base + ' The web build has no bridge to native.';
 		if (!this.lastStatus) return base;
 		if (!this.lastStatus.supported) {
-			return base + ' Không dùng được: ' + (this.lastStatus.reason || 'không rõ lý do') + '.';
+			return base + ' Unavailable: ' + (this.lastStatus.reason || 'reason unknown') + '.';
 		}
 		const scoreNote =
 			this.lastStatus.scoreKind === 'rank'
-				? 'độ tin cậy suy ra từ thứ hạng'
-				: 'độ tin cậy là xác suất của model';
+				? 'confidence is derived from rank'
+				: 'confidence is the model probability';
 		return base + ' Backend ' + this.lastStatus.backend + ', ' + scoreNote + '.';
 	}
 
@@ -82,7 +82,7 @@ export class NativeDetectorProvider implements LanguageDetectorProvider {
 	public create(options?: LanguageDetectorCreateOptions): Promise<LanguageDetector> {
 		const api = this.api;
 		if (!api) {
-			return Promise.reject(new Error('Bản web không có native module để nhận diện'));
+			return Promise.reject(new Error('The web build has no native module to detect with'));
 		}
 
 		const expected = (options && options.expectedInputLanguages) || [];
@@ -93,7 +93,7 @@ export class NativeDetectorProvider implements LanguageDetectorProvider {
 		let destroyed = false;
 
 		function assertAlive(): void {
-			if (destroyed) throw new Error('LanguageDetector session đã destroy()');
+			if (destroyed) throw new Error('LanguageDetector session was already destroyed');
 		}
 
 		return Promise.resolve({

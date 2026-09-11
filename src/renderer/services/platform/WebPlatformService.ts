@@ -11,7 +11,7 @@ export class WebPlatformService implements IPlatformService {
 			label: 'Web (browser)',
 			details: [
 				{ name: 'Origin', value: window.location.origin },
-				{ name: 'Ngôn ngữ hệ thống', value: navigator.language },
+				{ name: 'System language', value: navigator.language },
 				{ name: 'User agent', value: navigator.userAgent },
 			],
 		});

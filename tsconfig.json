@@ -23,7 +23,10 @@
 
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["src/shared/*"],
+      // Trỏ vào BẢN BUILD, không phải source: app phải dùng đúng artifact đã
+      // build ra, giống cách nativelibs/zlang được tiêu thụ.
+      "@zdetect": ["weblibs/zdetect/dist/index"]
     },
     // tsyringe dùng decorator; esbuild KHÔNG hỗ trợ emitDecoratorMetadata nên
     // mọi tham số constructor phải có @inject(TOKEN) tường minh.

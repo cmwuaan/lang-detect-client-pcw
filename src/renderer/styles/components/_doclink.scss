@@ -1,0 +1,36 @@
+@use '../abstracts' as a;
+
+/// Dấu hỏi tròn dẫn ra tài liệu gốc của vendor.
+///
+/// Là <a> thật chứ không phải <button> có onClick: middle-click, "copy link
+/// address", và hover hiện URL ở status bar đều hoạt động miễn phí.
+.doclink {
+  @include a.focus-ring(1px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  // Vùng bấm 24px cho một icon 14px — icon trần quá nhỏ để trúng bằng chuột.
+  width: 24px;
+  height: 24px;
+  margin: -4px 0;
+  flex: 0 0 auto;
+  border-radius: a.radius(pill);
+  color: var(--ink-muted);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--accent);
+    background: var(--accent-wash);
+  }
+
+  @include a.motion-safe {
+    transition: color 120ms ease, background-color 120ms ease;
+  }
+}
+
+/// Hàng nhãn: tên option bên trái, dấu hỏi ngay cạnh.
+.field__labelrow {
+  display: flex;
+  align-items: center;
+  gap: a.space(1);
+}

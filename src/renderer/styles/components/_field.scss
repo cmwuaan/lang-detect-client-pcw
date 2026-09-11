@@ -2,12 +2,16 @@
 
 .field { display: flex; flex-direction: column; gap: a.space(2); }
 .field__label { @include a.eyebrow; }
-.field__hint { @include a.tabular; color: var(--ink-muted); font-size: a.font-size(sm); }
+/// Chú thích dưới ô nhập. Là câu chữ nên KHÔNG tabular — tabular chỉ dành cho
+/// cột số cần thẳng hàng dọc.
+.field__hint { color: var(--ink-muted); font-size: a.font-size(xs); line-height: 1.45; }
 
 .textarea {
   @include a.focus-ring;
   width: 100%;
-  min-height: 128px;
+  // Vừa đủ ~4 dòng. Cao hơn thì nó nuốt mất chỗ của bảng option bên dưới.
+  min-height: 96px;
+  max-height: 200px;
   padding: a.space(3);
   resize: vertical;
   background: var(--plane);

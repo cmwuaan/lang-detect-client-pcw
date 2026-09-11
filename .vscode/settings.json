@@ -1,4 +1,10 @@
 {
-	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	// Key ĐÚNG là "typescript.tsdk". Trước đây ghi "js/ts.tsdk.path" — không phải
+	// setting nào của VS Code cả, nên nó bị bỏ qua im lặng và editor dùng
+	// TypeScript bundled (5.x) thay vì 3.9.6 của repo. Hậu quả: editor và `npm run
+	// typecheck` chấm theo hai bộ luật khác nhau.
+	"typescript.tsdk": "node_modules/typescript/lib",
+	// Nhắc dùng TS của workspace thay vì im lặng dùng bản của editor.
+	"typescript.enablePromptUseWorkspaceTsdk": true,
 	"editor.insertSpaces": false
 }

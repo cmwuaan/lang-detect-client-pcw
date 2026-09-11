@@ -1,0 +1,240 @@
+@use '../abstracts' as a;
+
+////
+/// Control tương tác dùng chung: tag input, slider, tabs, meter.
+/// Tất cả đều đi qua var(--*) nên theo theme mà không cần biết theme là gì.
+////
+
+/// ------------------------------------------------------------ tag input
+/// Chip xoá được, thay cho một ô text dài phải tự gõ dấu phẩy.
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: a.space(1);
+  padding: a.space(1) a.space(2);
+  min-height: 34px;
+  background: var(--plane);
+  border: 1px solid var(--baseline);
+  border-radius: a.radius(md);
+
+  &:focus-within { border-color: var(--focus); }
+  &.is-disabled { opacity: 0.55; border-style: dashed; cursor: not-allowed; }
+}
+
+.tags__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: a.space(1);
+  padding: 1px a.space(1) 1px a.space(2);
+  border-radius: a.radius(pill);
+  background: var(--accent-wash);
+  border: 1px solid var(--accent);
+  color: var(--ink);
+  font-family: a.$font-mono;
+  font-size: a.font-size(xs);
+  white-space: nowrap;
+}
+
+/// Nút × phải đủ to để bấm trúng nhưng không được to hơn chính cái chip.
+.tags__remove {
+  @include a.focus-ring(1px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: a.radius(pill);
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  line-height: 1;
+
+  &:hover { color: var(--ink); background: var(--surface); }
+}
+
+/// Ô nhập nằm chung khung với chip, không viền riêng.
+.tags__input {
+  flex: 1 1 80px;
+  min-width: 80px;
+  padding: a.space(1) 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: a.$font-mono;
+  font-size: a.font-size(sm);
+
+  &::placeholder { color: var(--ink-muted); font-family: a.$font-sans; }
+  &:disabled { cursor: not-allowed; }
+}
+
+/// ------------------------------------------------------------ slider
+.slider {
+  display: flex;
+  align-items: center;
+  gap: a.space(3);
+}
+
+.slider__range {
+  @include a.focus-ring;
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+
+  &:disabled { cursor: not-allowed; opacity: 0.5; }
+}
+
+/// Giá trị hiện tại. `tabular` để con số không nhảy ngang khi kéo.
+.slider__value {
+  @include a.tabular;
+  min-width: 52px;
+  text-align: right;
+  font-size: a.font-size(sm);
+  font-weight: a.weight(medium);
+  color: var(--ink-2);
+}
+
+/// ------------------------------------------------------------ toggle
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: a.space(2);
+  font-size: a.font-size(sm);
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+
+  input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+}
+
+/// ------------------------------------------------------------ tabs
+/// Gộp 3 khối JSON dài thành 1 khối + 3 tab: đây là thứ cắt nhiều chiều cao nhất.
+.tabs {
+  display: flex;
+  gap: a.space(1);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.tabs__tab {
+  @include a.focus-ring(-2px);
+  padding: a.space(2) a.space(3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: a.$font-mono;
+  font-size: a.font-size(xs);
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { color: var(--ink-2); }
+}
+
+.tabs__tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+/// Chấm báo trạng thái ngay trên tab, khỏi phải mở ra mới biết có lỗi.
+.tabs__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: a.space(1);
+  border-radius: a.radius(pill);
+  background: var(--ink-muted);
+  vertical-align: middle;
+}
+
+/// ------------------------------------------------------------ languages
+/// Danh sách ngôn ngữ engine chắc chắn kết luận được. Chỉ hiện khi provider
+/// khai được chính xác — native để trống nên không có khối này.
+.langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: a.space(1);
+}
+
+.langs__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: a.space(1);
+  padding: 1px a.space(2);
+  border: 1px solid var(--hairline);
+  border-radius: a.radius(pill);
+  color: var(--ink-2);
+  font-size: a.font-size(xs);
+  white-space: nowrap;
+}
+
+/// Thẻ BCP 47 đứng trước tên đọc được — đó mới là thứ API trả về.
+.langs__tag {
+  font-family: a.$font-mono;
+  color: var(--ink);
+}
+
+/// ------------------------------------------------------------ meter
+/// Danh sách giả thuyết kèm thanh độ dài — đọc nhanh hơn nhiều so với đọc số.
+.meter { display: grid; gap: a.space(2); }
+
+.meter__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: a.space(3);
+}
+
+.meter__label {
+  display: flex;
+  align-items: baseline;
+  gap: a.space(2);
+  min-width: 0;
+}
+
+.meter__tag {
+  font-family: a.$font-mono;
+  font-size: a.font-size(sm);
+  color: var(--ink);
+}
+
+.meter__name {
+  color: var(--ink-muted);
+  font-size: a.font-size(xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meter__track {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: a.radius(pill);
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  border-radius: a.radius(pill);
+  background: var(--accent);
+  @include a.motion-safe { transition: width 160ms ease; }
+}
+
+.meter__value {
+  @include a.tabular;
+  text-align: right;
+  font-size: a.font-size(xs);
+  color: var(--ink-2);
+}
+
+/// Backend chỉ xếp hạng (ELS) thì không có điểm để vẽ — nói thẳng là hạng.
+.meter__rank {
+  font-family: a.$font-mono;
+  font-size: a.font-size(xs);
+  color: var(--ink-muted);
+}

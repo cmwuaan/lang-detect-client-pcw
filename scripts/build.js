@@ -28,7 +28,12 @@ const PORT_FROM_ENV = process.env.PORT ? Number(process.env.PORT) : null;
 /** Số cổng thử tiếp theo khi cổng mong muốn đang bận. */
 const PORT_SCAN_RANGE = 20;
 
-const alias = { '@shared': path.join(SRC, 'shared') };
+const alias = {
+	'@shared': path.join(SRC, 'shared'),
+	// Bản web chạy BUNDLE ĐÃ BUILD của zdetect, không phải source TypeScript.
+	// Dựng lại bằng: cd weblibs/zdetect && npm run build
+	'@zdetect': path.join(ROOT, 'weblibs/zdetect/dist/index.js'),
+};
 
 // ------------------------------------------------------------------- port
 

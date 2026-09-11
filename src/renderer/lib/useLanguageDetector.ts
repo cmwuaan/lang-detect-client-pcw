@@ -22,14 +22,14 @@ export interface LanguageDetectorState {
 
 /** Tên DOMException mà create() có thể ném, theo spec. */
 const ERROR_MESSAGES: { [name: string]: string } = {
-	NotAllowedError: 'Bị chặn — cần thao tác của người dùng, hoặc Permissions-Policy chặn API này.',
+	NotAllowedError: 'Blocked — needs a user gesture, or Permissions-Policy is blocking this API.',
 	NotSupportedError:
-		'Runtime báo có model nhưng không tải được. Thường gặp trên Electron: nó có sẵn API ' +
-		'nhưng thiếu dịch vụ tải model của Chrome. Hãy dùng bản web trên Chrome/Edge >= 138, ' +
-		'hoặc chọn phương pháp khác.',
-	NetworkError: 'Lỗi mạng, hoặc người dùng đã huỷ tải model.',
-	InvalidStateError: 'Document chưa sẵn sàng.',
-	OperationError: 'Không tạo được session nhận diện.',
+		'The runtime reports a model but cannot download it. Common on Electron: the API ' +
+		'exists but Chrome model-download service does not. Use the web build on ' +
+		'Chrome/Edge 138+ instead.',
+	NetworkError: 'Network error, or the user cancelled the model download.',
+	InvalidStateError: 'The document is not ready yet.',
+	OperationError: 'Could not create a detection session.',
 };
 
 /**
@@ -49,7 +49,7 @@ function describeError(err: unknown): CreateFailure {
 	const name = asError && asError.name ? asError.name : '';
 	const message =
 		ERROR_MESSAGES[name] ||
-		(asError && asError.message ? asError.message : 'Không tạo được session nhận diện.');
+		(asError && asError.message ? asError.message : 'Could not create a detection session.');
 
 	return { name: name, message: message, retryable: FATAL_ERRORS.indexOf(name) === -1 };
 }

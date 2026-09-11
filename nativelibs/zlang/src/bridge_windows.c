@@ -15,11 +15,10 @@
  * CHỖ VẶN ĐƯỢC của ELS nằm ở hai nơi, không nơi nào trùng với Apple:
  *
  *   MAPPING_ENUM_OPTIONS (bước chọn dịch vụ)
- *     OnlineService = 0    ép offline — bắt buộc, xem openService()
  *     pszInputLanguage     lọc dịch vụ theo ngôn ngữ đầu vào
  *     pszInputScript       lọc dịch vụ theo hệ chữ viết
  *   MappingRecognizeText
- *     dwIndex              bắt đầu đọc từ giữa văn bản
+ *     dwIndex              bắt đầu đọc từ giữa văn bản (0..dwLength-1)
  *
  * KHÔNG CÓ: languageHints, và không có constraint áp lên KẾT QUẢ.
  * `pszInputLanguage` nghe giống `languageConstraints` của Apple nhưng khác hẳn —
@@ -73,14 +72,18 @@ static void freeWide(WCHAR *wide) {
 /*
  * Lấy handle service language-detection; caller gọi MappingFreeServices.
  *
- * `OnlineService = 0` = chỉ lấy engine offline. ZeroMemory ở trên vốn đã đặt
- * bitfield này về 0, nên đây KHÔNG phải sửa lỗi — viết ra để cái ràng buộc quan
- * trọng nhất của module ("không cần mạng, không tải model") là một dòng code đọc
- * được, thay vì một hệ quả tình cờ của việc zero cả struct. Ai đó đổi sang khởi
- * tạo kiểu khác sẽ thấy ngay thứ phải giữ.
+ * `OnlineService = 0`: MSDN ghi trường này là "Reserved for future use. Must be
+ * set to 0" — KHÔNG phải công tắc bật/tắt engine online như một số hướng dẫn
+ * ngoài luồng mô tả. ZeroMemory đã đặt nó về 0 rồi; viết ra cho tường minh vì
+ * hợp đồng bắt buộc giá trị này. `ServiceType` cũng vậy.
+ *
+ * Nói cách khác: ELS KHÔNG cho chọn offline/online ở đây. Việc "không cần mạng"
+ * đến từ chính dịch vụ Microsoft Language Detection chạy cục bộ, không đến từ
+ * cờ này.
  *
  * `pszCategory` + `pszInputContentType` thu hẹp phép liệt kê đúng như tài liệu
- * ELS hướng dẫn; `pGuid` vẫn giữ để chốt đúng một dịch vụ.
+ * ELS hướng dẫn; `pGuid` vẫn giữ để chốt đúng một dịch vụ. Windows 7 chỉ hỗ trợ
+ * content type "text/plain".
  *
  * `inputLanguage`/`inputScript` lọc DỊCH VỤ chứ không lọc kết quả — xem
  * zlang_bridge.h. NULL nghĩa là không giới hạn.

@@ -2,7 +2,10 @@ import * as React from 'react';
 
 import { NativeCapabilities } from '@shared/ipc';
 
-/** Giá trị đang gõ, giữ nguyên dạng text để người dùng gõ dở không bị nhảy số. */
+import { DocLink } from './DocLink';
+import { TagInput } from './TagInput';
+
+/** Raw text as typed, so a half-typed value never jumps under the cursor. */
 export interface NativeOptionText {
 	maxResults: string;
 	// macOS — Apple NaturalLanguage
@@ -14,171 +17,290 @@ export interface NativeOptionText {
 	startIndex: string;
 }
 
+/**
+ * Trạng thái mặc định = MỌI Ô ĐỀU RỖNG.
+ *
+ * Không phải chỗ này lười điền sẵn: rỗng nghĩa là "không truyền option đó", và
+ * khi đó OS giữ hành vi gốc của chính nó. Điền sẵn một con số vào đây là tự đặt
+ * ra mặc định thay cho Apple/Microsoft — đúng thứ module cố tình tránh.
+ */
+export const DEFAULT_OPTION_TEXT: NativeOptionText = {
+	maxResults: '',
+	constraints: '',
+	hints: '',
+	inputLanguage: '',
+	inputScript: '',
+	startIndex: '',
+};
+
+/** Đã ở mặc định chưa — để nút Reset tự tắt khi không còn gì để reset. */
+export function isDefaultOptionText(value: NativeOptionText): boolean {
+	const keys = Object.keys(DEFAULT_OPTION_TEXT) as Array<keyof NativeOptionText>;
+	return keys.every(function (key) {
+		return value[key] === DEFAULT_OPTION_TEXT[key];
+	});
+}
+
+/**
+ * Đường dẫn tài liệu CHÍNH THỨC của từng option, đã kiểm chứng từng URL.
+ *
+ * `languageHints` mang hậu tố `-7dwgv` do Apple phải phân biệt biến thể Swift
+ * với biến thể Objective-C; bản không hậu tố trả về 404 thật, đừng "dọn cho
+ * gọn".
+ */
+const DOCS = {
+	maxResults:
+		'https://developer.apple.com/documentation/naturallanguage/nllanguagerecognizer/languagehypotheses(withmaximum:)',
+	constraints:
+		'https://developer.apple.com/documentation/naturallanguage/nllanguagerecognizer/languageconstraints',
+	hints:
+		'https://developer.apple.com/documentation/naturallanguage/nllanguagerecognizer/languagehints-7dwgv',
+	enumOptions:
+		'https://learn.microsoft.com/en-us/windows/win32/api/elscore/ns-elscore-mapping_enum_options',
+	recognizeText:
+		'https://learn.microsoft.com/en-us/windows/win32/api/elscore/nf-elscore-mappingrecognizetext',
+};
+
+/** Khớp ZLANG_MAX_RESULTS. */
+const MAX_RESULTS_CAP = 16;
+
 export interface NativeOptionsProps {
 	value: NativeOptionText;
 	onChange: (next: NativeOptionText) => void;
-	/** null khi chưa đọc được `info()` — coi như chưa biết, tạm khoá. */
+	/** null while `info()` has not been read yet — treat as unknown, keep locked. */
 	capabilities: NativeCapabilities | null;
 }
 
-interface RowProps {
-	id: string;
+interface FieldProps {
+	htmlFor?: string;
 	label: string;
-	/** Property của Apple mà ô này ánh xạ tới. */
+	/** Native symbol this field maps to. */
 	maps: string;
+	docHref: string;
 	hint: string;
-	placeholder: string;
-	value: string;
-	disabled: boolean;
-	onChange: (next: string) => void;
+	children: React.ReactNode;
 }
 
-function Row(props: RowProps): JSX.Element {
+function Field(props: FieldProps): JSX.Element {
 	return (
 		<div className="field">
-			<label className="field__label" htmlFor={props.id}>
-				{props.label}
-			</label>
-			<input
-				id={props.id}
-				className="input"
-				type="text"
-				spellCheck={false}
-				value={props.value}
-				placeholder={props.placeholder}
-				disabled={props.disabled}
-				onChange={function (event) {
-					props.onChange(event.target.value);
-				}}
-			/>
-			<span className="field__hint">
-				<code>{props.maps}</code> — {props.hint}
-			</span>
+			<div className="field__labelrow">
+				<label className="field__label" htmlFor={props.htmlFor}>
+					{props.label}
+				</label>
+				<DocLink href={props.docHref} label={props.maps + ' documentation'} />
+			</div>
+			{props.children}
+			<span className="field__hint">{props.hint}</span>
 		</div>
 	);
 }
 
 /**
- * Truyền thẳng option của `NLLanguageRecognizer` xuống native.
+ * Pass NLLanguageRecognizer / ELS options straight through to native.
  *
- * Ô nào backend không hỗ trợ thì bị khoá, đọc từ `info().capabilities` chứ không
- * đoán theo `process.platform` — native tự khai nó làm được gì. Trên Windows
- * (ELS) cả hai ô constraints/hints đều khoá, vì ELS chỉ nhận văn bản.
+ * Ô nào backend không hỗ trợ thì khoá, đọc từ `info().capabilities` chứ không
+ * đoán theo `process.platform` — native tự khai nó làm được gì. Nhóm nào khoá
+ * hết thì gập lại để khỏi chiếm chiều cao vô ích.
  */
 export function NativeOptions(props: NativeOptionsProps): JSX.Element {
 	const caps = props.capabilities;
 	const value = props.value;
 
-	function set(key: keyof NativeOptionText): (next: string) => void {
+	function set(key: keyof NativeOptionText, next: string): void {
+		const updated: NativeOptionText = {
+			maxResults: value.maxResults,
+			constraints: value.constraints,
+			hints: value.hints,
+			inputLanguage: value.inputLanguage,
+			inputScript: value.inputScript,
+			startIndex: value.startIndex,
+		};
+		updated[key] = next;
+		props.onChange(updated);
+	}
+
+	function setter(key: keyof NativeOptionText): (next: string) => void {
 		return function (next: string) {
-			const updated: NativeOptionText = {
-				maxResults: value.maxResults,
-				constraints: value.constraints,
-				hints: value.hints,
-				inputLanguage: value.inputLanguage,
-				inputScript: value.inputScript,
-				startIndex: value.startIndex,
-			};
-			updated[key] = next;
-			props.onChange(updated);
+			set(key, next);
 		};
 	}
 
-	/**
-	 * Ô nào backend không hiểu thì nói thẳng lý do. `null` = chưa đọc được
-	 * capabilities, khi đó giữ mô tả bình thường chứ đừng vu cho backend.
-	 */
-	function hintFor(supported: boolean | null | undefined, usable: string): string {
-		if (caps && supported === false) return 'backend này không hỗ trợ — ô bị khoá';
-		return usable;
-	}
+	const appleOn = !!caps && (caps.constraints || caps.hints);
+	const elsOn = !!caps && (caps.inputLanguage || caps.inputScript || caps.startIndex);
+
+	// Rỗng = không truyền. Slider cần một số để hiển thị, nên lúc "auto" nó
+	// nằm ở mức trần — nhưng giá trị gửi đi vẫn là "không gửi gì".
+	const isAuto = value.maxResults === '';
+	const sliderValue = isAuto ? MAX_RESULTS_CAP : Number(value.maxResults);
 
 	return (
 		<div className="options">
-			<Row
-				id="opt-max-results"
+			<Field
+				htmlFor="opt-max-results"
 				label="maxResults"
 				maps="languageHypotheses(withMaximum:)"
-				hint="số giả thuyết tối đa, 1..16. Bỏ trống = không truyền, native xin tối đa."
-				placeholder="bỏ trống"
-				value={value.maxResults}
-				disabled={false}
-				onChange={set('maxResults')}
-			/>
+				docHref={DOCS.maxResults}
+				hint="Auto sends nothing and lets the OS decide. Every backend understands this one."
+			>
+				<div className="slider">
+					<label className="toggle">
+						<input
+							type="checkbox"
+							checked={isAuto}
+							onChange={function (event) {
+								set('maxResults', event.target.checked ? '' : String(MAX_RESULTS_CAP));
+							}}
+						/>
+						Auto
+					</label>
+					<input
+						id="opt-max-results"
+						className="slider__range"
+						type="range"
+						min={1}
+						max={MAX_RESULTS_CAP}
+						step={1}
+						value={sliderValue}
+						disabled={isAuto}
+						onChange={function (event) {
+							set('maxResults', event.target.value);
+						}}
+					/>
+					<span className="slider__value">{isAuto ? 'auto' : sliderValue}</span>
+				</div>
+			</Field>
 
-			<p className="options__group">macOS — Apple NaturalLanguage</p>
+			<details className="group" open={appleOn}>
+				<summary className="group__summary">
+					macOS — Apple NaturalLanguage
+					{caps && !appleOn ? <span className="group__badge">unsupported here</span> : null}
+				</summary>
 
-			<Row
-				id="opt-constraints"
-				label="constraints"
-				maps="languageConstraints"
-				hint={hintFor(
-					caps && caps.constraints,
-					'thẻ BCP 47, cách nhau bởi dấu phẩy. Ràng buộc MỀM: ngôn ngữ ngoài danh sách vẫn có thể xuất hiện với confidence 0.'
-				)}
-				placeholder="en, fr, zh-Hant"
-				value={value.constraints}
-				disabled={!caps || !caps.constraints}
-				onChange={set('constraints')}
-			/>
+				<Field
+					htmlFor="opt-constraints"
+					label="constraints"
+					maps="languageConstraints"
+					docHref={DOCS.constraints}
+					hint={
+						caps && !caps.constraints
+							? 'Not supported by this backend.'
+							: 'BCP 47 tags. A SOFT constraint: other languages can still appear, with confidence 0.'
+					}
+				>
+					<TagInput
+						id="opt-constraints"
+						value={value.constraints}
+						onChange={setter('constraints')}
+						placeholder="en, fr, zh-Hant"
+						disabled={!caps || !caps.constraints}
+					/>
+				</Field>
 
-			<Row
-				id="opt-hints"
-				label="hints"
-				maps="languageHints"
-				hint={hintFor(
-					caps && caps.hints,
-					'prior dạng thẻ:trọng số, cách nhau bởi dấu phẩy.'
-				)}
-				placeholder="vi:0.9, en:0.1"
-				value={value.hints}
-				disabled={!caps || !caps.hints}
-				onChange={set('hints')}
-			/>
+				<Field
+					htmlFor="opt-hints"
+					label="hints"
+					maps="languageHints"
+					docHref={DOCS.hints}
+					hint={
+						caps && !caps.hints
+							? 'Not supported by this backend.'
+							: 'Priors as tag:weight. Strong enough to flip the result on ambiguous text.'
+					}
+				>
+					<TagInput
+						id="opt-hints"
+						value={value.hints}
+						onChange={setter('hints')}
+						placeholder="vi:0.9, en:0.1"
+						disabled={!caps || !caps.hints}
+					/>
+				</Field>
+			</details>
 
-			<p className="options__group">Windows — Extended Linguistic Services</p>
+			<details className="group" open={elsOn}>
+				<summary className="group__summary">
+					Windows — Extended Linguistic Services
+					{caps && !elsOn ? <span className="group__badge">unsupported here</span> : null}
+				</summary>
 
-			<Row
-				id="opt-input-language"
-				label="inputLanguage"
-				maps="MAPPING_ENUM_OPTIONS.pszInputLanguage"
-				hint={hintFor(
-					caps && caps.inputLanguage,
-					'thẻ IETF. Lọc DỊCH VỤ chứ không lọc kết quả — khác constraints của Apple.'
-				)}
-				placeholder="vi"
-				value={value.inputLanguage}
-				disabled={!caps || !caps.inputLanguage}
-				onChange={set('inputLanguage')}
-			/>
+				<Field
+					htmlFor="opt-input-language"
+					label="inputLanguage"
+					maps="MAPPING_ENUM_OPTIONS.pszInputLanguage"
+					docHref={DOCS.enumOptions}
+					hint={
+						caps && !caps.inputLanguage
+							? 'Not supported by this backend.'
+							: 'IETF tag. Filters which SERVICE is used, not which languages come back.'
+					}
+				>
+					<input
+						id="opt-input-language"
+						className="input"
+						type="text"
+						spellCheck={false}
+						autoComplete="off"
+						value={value.inputLanguage}
+						placeholder="vi"
+						disabled={!caps || !caps.inputLanguage}
+						onChange={function (event) {
+							set('inputLanguage', event.target.value);
+						}}
+					/>
+				</Field>
 
-			<Row
-				id="opt-input-script"
-				label="inputScript"
-				maps="MAPPING_ENUM_OPTIONS.pszInputScript"
-				hint={hintFor(
-					caps && caps.inputScript,
-					'hệ chữ viết của văn bản đầu vào. Cũng lọc dịch vụ.'
-				)}
-				placeholder="Latn"
-				value={value.inputScript}
-				disabled={!caps || !caps.inputScript}
-				onChange={set('inputScript')}
-			/>
+				<Field
+					htmlFor="opt-input-script"
+					label="inputScript"
+					maps="MAPPING_ENUM_OPTIONS.pszInputScript"
+					docHref={DOCS.enumOptions}
+					hint={
+						caps && !caps.inputScript
+							? 'Not supported by this backend.'
+							: 'Unicode script name of the input text. Also a service filter.'
+					}
+				>
+					<input
+						id="opt-input-script"
+						className="input"
+						type="text"
+						spellCheck={false}
+						autoComplete="off"
+						value={value.inputScript}
+						placeholder="Latn"
+						disabled={!caps || !caps.inputScript}
+						onChange={function (event) {
+							set('inputScript', event.target.value);
+						}}
+					/>
+				</Field>
 
-			<Row
-				id="opt-start-index"
-				label="startIndex"
-				maps="MappingRecognizeText.dwIndex"
-				hint={hintFor(
-					caps && caps.startIndex,
-					'vị trí ký tự bắt đầu đọc. macOS không có tham số này — tự cắt chuỗi trước khi gọi.'
-				)}
-				placeholder="0"
-				value={value.startIndex}
-				disabled={!caps || !caps.startIndex}
-				onChange={set('startIndex')}
-			/>
+				<Field
+					htmlFor="opt-start-index"
+					label="startIndex"
+					maps="MappingRecognizeText.dwIndex"
+					docHref={DOCS.recognizeText}
+					hint={
+						caps && !caps.startIndex
+							? 'Not supported by this backend — slice the string yourself on macOS.'
+							: 'Character index to start reading from, 0 to length-1.'
+					}
+				>
+					<input
+						id="opt-start-index"
+						className="input"
+						type="number"
+						min={0}
+						value={value.startIndex}
+						placeholder="0"
+						disabled={!caps || !caps.startIndex}
+						onChange={function (event) {
+							set('startIndex', event.target.value);
+						}}
+					/>
+				</Field>
+			</details>
 		</div>
 	);
 }

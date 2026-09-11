@@ -1,0 +1,37 @@
+@use '../abstracts' as a;
+
+/// Hai cột: TRÁI điền vào, PHẢI đọc ra. Cùng chiếm hết chiều cao còn lại.
+///
+/// `minmax(0, …)` chứ không `1fr`: min-width mặc định của grid item là kích
+/// thước nội dung, mà khối <pre> JSON không xuống dòng — thiếu minmax là cột
+/// phải phình ra đẩy cột trái bẹp lại.
+.split {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: a.space(3);
+}
+
+/// Mỗi cột cuộn riêng. `min-height: 0` là thứ làm cho overflow có tác dụng
+/// trong grid — bỏ đi thì cột cao bằng nội dung và đẩy cả trang dài ra.
+.split__col {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: a.space(3);
+  // Chừa chỗ cho thanh cuộn để nội dung không nhảy ngang khi nó xuất hiện.
+  padding-right: a.space(1);
+}
+
+/// Màn hình hẹp: xếp dọc, trả quyền cuộn về cho cả khối.
+@media (max-width: 900px) {
+  .shell { overflow-y: auto; }
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+  }
+  .split__col { overflow: visible; }
+}

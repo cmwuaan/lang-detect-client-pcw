@@ -1,21 +1,59 @@
 @use '../abstracts' as a;
 
-/// Bảng tuỳ chọn native. Mỗi hàng là một property của NLLanguageRecognizer.
+/// Bảng tuỳ chọn native. Mỗi hàng là một property của API gốc.
 .options {
   display: grid;
   gap: a.space(4);
 }
 
-/// Tách nhóm theo nền tảng: hai bộ option không thay thế nhau, nên đừng để
-/// người đọc tưởng chúng là một danh sách phẳng.
-.options__group {
-  @include a.eyebrow;
-  margin: a.space(2) 0 0;
-  padding-top: a.space(3);
-  border-top: 1px solid var(--hairline);
+/// Nhóm gập được. Nhóm nào backend không hỗ trợ thì đóng sẵn — nó vẫn phải có
+/// mặt (để thấy option đó tồn tại) nhưng không được chiếm chiều cao.
+.group {
+  border: 1px solid var(--hairline);
+  border-radius: a.radius(md);
+  padding: 0 a.space(3);
 }
 
-/// Cùng ngôn ngữ hình thức với .textarea, chỉ khác chiều cao — đây vẫn là ô nhập.
+.group[open] { padding-bottom: a.space(4); }
+
+.group__summary {
+  @include a.eyebrow;
+  @include a.focus-ring(-2px);
+  display: flex;
+  align-items: center;
+  gap: a.space(2);
+  padding: a.space(3) 0;
+  cursor: pointer;
+  list-style: none;
+
+  // Mũi tên mặc định của Safari/WebKit nằm ngoài luồng flex; tự vẽ lại.
+  &::-webkit-details-marker { display: none; }
+
+  &::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 4px solid currentColor;
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+    @include a.motion-safe { transition: transform 120ms ease; }
+  }
+}
+
+.group[open] > .group__summary::before { transform: rotate(90deg); }
+
+.group__badge {
+  @include a.eyebrow;
+  margin-left: auto;
+  padding: 1px a.space(2);
+  border: 1px dashed var(--baseline);
+  border-radius: a.radius(pill);
+  color: var(--ink-muted);
+}
+
+.group > .field + .field { margin-top: a.space(4); }
+
+/// Cùng ngôn ngữ hình thức với .textarea, chỉ khác chiều cao — vẫn là ô nhập.
 .input {
   @include a.focus-ring;
   width: 100%;
@@ -28,7 +66,7 @@
   font-size: a.font-size(sm);
   line-height: 1.6;
 
-  &::placeholder { color: var(--ink-muted); }
+  &::placeholder { color: var(--ink-muted); font-family: a.$font-sans; }
   &:hover:not(:disabled) { border-color: var(--ink-muted); }
 
   /// Ô bị khoá = backend không hỗ trợ option đó. Phải nhìn ra ngay là không gõ

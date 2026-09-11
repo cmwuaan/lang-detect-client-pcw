@@ -2,10 +2,13 @@
 
 .card {
   @include a.card-surface;
-  padding: a.space(5);
+  padding: a.space(4);
   display: flex;
   flex-direction: column;
-  gap: a.space(4);
+  gap: a.space(3);
+  // Card không được co lại trong cột cuộn: để nội dung quyết định chiều cao,
+  // còn phần thừa thì cột tự cuộn.
+  flex: 0 0 auto;
 }
 
 .card__head {

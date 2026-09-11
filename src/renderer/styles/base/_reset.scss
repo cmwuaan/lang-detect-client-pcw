@@ -2,7 +2,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html, body { height: 100%; }
+// #root cũng phải cao 100%: app khoá chiều cao vào viewport và cho từng cột tự
+// cuộn, nên chuỗi height phải liền mạch từ <html> xuống tới .shell.
+html, body, #root { height: 100%; }
 
 body {
   margin: 0;

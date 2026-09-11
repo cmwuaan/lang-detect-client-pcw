@@ -1,0 +1,40 @@
+@use '../abstracts' as a;
+
+/// Kết quả chính. Thứ duy nhất trên màn hình được phép to như vậy — nhìn vào là
+/// thấy ngay, không phải quét mắt tìm.
+.hero {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: a.space(4);
+  flex-wrap: wrap;
+}
+
+.hero__value {
+  font-size: a.font-size(hero);
+  font-weight: a.weight(semibold);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  // Số lớn đứng một mình phải để figure proportional; tabular làm nó rời rạc.
+  overflow-wrap: anywhere;
+}
+
+.hero__value.is-muted { color: var(--ink-muted); }
+
+.hero__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: a.space(1);
+  text-align: right;
+}
+
+.hero__confidence {
+  @include a.tabular;
+  font-size: a.font-size(xl);
+  font-weight: a.weight(medium);
+  color: var(--accent);
+}
+
+.hero__note { @include a.eyebrow; }

@@ -14,7 +14,21 @@
   cursor: pointer;
 
   @include a.motion-safe { transition: background 120ms ease; }
-  &:hover { background: var(--accent-hover); }
+  &:hover:not(:disabled) { background: var(--accent-hover); }
+
+  /// Nút tắt = không còn gì để làm. Phải nhìn ra ngay, và con trỏ không được
+  /// gợi ý là bấm được.
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+}
+
+/// Hành động phụ nằm cạnh tiêu đề card — không được to ngang nút chính.
+.button--small {
+  padding: a.space(1) a.space(3);
+  font-size: a.font-size(sm);
+  font-weight: a.weight(regular);
 }
 
 .button--ghost {
@@ -22,7 +36,8 @@
   color: var(--ink-2);
   border-color: var(--hairline);
 
-  &:hover { background: var(--plane); color: var(--ink); }
+  &:hover:not(:disabled) { background: var(--plane); color: var(--ink); }
+  &:disabled { background: transparent; }
 }
 
 .button--chip {
@@ -34,7 +49,14 @@
   font-size: a.font-size(sm);
   font-weight: a.weight(regular);
 
-  &:hover { background: var(--plane); color: var(--ink); border-color: var(--baseline); }
+  &:hover:not(:disabled) { background: var(--plane); color: var(--ink); border-color: var(--baseline); }
+}
+
+/// Mẫu thuộc ngôn ngữ engine không hỗ trợ. Gạch ngang chứ không chỉ làm mờ:
+/// mờ dễ bị nhầm với "đang tải", gạch ngang thì nghĩa rõ ràng là không dùng được.
+.button--chip.is-unsupported {
+  text-decoration: line-through;
+  border-style: dashed;
 }
 
 .button--chip.is-active {

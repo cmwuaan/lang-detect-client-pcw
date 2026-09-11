@@ -2,8 +2,9 @@
 /// Hợp đồng nhận diện ngôn ngữ, đặt tên KHỚP Web API `LanguageDetector`:
 /// https://developer.mozilla.org/en-US/docs/Web/API/LanguageDetector
 ///
-/// Nhờ vậy một implementation dùng API thật của trình duyệt cắm vào được mà
-/// không cần lớp adapter nào — xem providers/BrowserDetectorProvider.ts.
+/// Giữ đúng tên của Web API là một lựa chọn có chủ ý: hình dạng này quen thuộc,
+/// và nếu sau này cần cắm thẳng `window.LanguageDetector` của trình duyệt vào
+/// thì không phải viết lớp adapter nào.
 ////
 
 /** Khớp AvailabilityStatus của Web API. */
@@ -41,9 +42,9 @@ export interface CreateMonitor {
  * Option riêng của backend native, KHÔNG có trong Web API.
  *
  * Đây là phần mở rộng có chủ ý: hợp đồng của repo là **superset** của Web API.
- * `BrowserDetectorProvider` chuyển nguyên object sang API thật của trình duyệt,
- * và trình duyệt bỏ qua field lạ — nên việc thêm field ở đây không phá tính chất
- * "cắm thẳng vào, không cần adapter".
+ * Một provider dùng API thật của trình duyệt vẫn chuyển nguyên object xuống được
+ * — trình duyệt bỏ qua field lạ — nên thêm field ở đây không phá tính chất "cắm
+ * thẳng vào, không cần adapter".
  *
  * Chỉ `NativeDetectorProvider` đọc tới nó.
  */
@@ -115,8 +116,29 @@ export interface LanguageDetectorProvider {
   readonly label: string;
   /** Mô tả ngắn cách hoạt động. */
   readonly description: string;
+  /**
+   * Thẻ BCP 47 mà provider này chắc chắn kết luận được.
+   *
+   * `undefined` nghĩa là KHÔNG BIẾT, không phải "không hỗ trợ gì". Provider
+   * native cố tình để trống: model của Apple/Microsoft nhận diện hàng chục ngôn
+   * ngữ nhưng không API nào liệt kê ra được, nên bịa một danh sách là nói dối.
+   * Chỉ provider tự dựng model mới khai được chính xác.
+   */
+  readonly supportedLanguages?: string[];
 
   availability(options?: LanguageDetectorCreateOptions): Promise<AvailabilityStatus | null>;
+
+  /**
+   * Confidence cho MỌI ngôn ngữ provider biết, sắp giảm dần, tổng bằng 1.
+   *
+   * Tương ứng `compute_language_confidence_values()` của lingua. Khác `detect()`
+   * ở chỗ đây là ĐIỂM GỐC của engine, chưa qua phép quy đổi nào sang hợp đồng
+   * Web API — không chèn phần tử 'und', không nhân thêm hệ số nào.
+   *
+   * `undefined` khi provider không moi ra được con số thô (ví dụ khi điểm đã
+   * nằm sẵn ở một đường dữ liệu khác). Bên gọi phải chịu được việc thiếu nó.
+   */
+  computeConfidenceValues?(text: string): Promise<LanguageDetectionResult[]>;
 
   /**
    * LƯU Ý: theo spec, `create()` cần transient activation (user gesture) khi

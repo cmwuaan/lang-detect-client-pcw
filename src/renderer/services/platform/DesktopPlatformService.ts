@@ -10,7 +10,7 @@ export class DesktopPlatformService implements IPlatformService {
 
 	private get api(): ElectronAPI {
 		const api = window.electronAPI;
-		if (!api) throw new Error('electronAPI chưa được preload expose');
+		if (!api) throw new Error('electronAPI was not exposed by the preload script');
 		return api;
 	}
 
@@ -24,7 +24,7 @@ export class DesktopPlatformService implements IPlatformService {
 				{ name: 'Chromium', value: info.chromeVersion },
 				{ name: 'Node', value: info.nodeVersion },
 				{ name: 'OS', value: info.osLabel },
-				{ name: 'Kiến trúc', value: info.arch },
+				{ name: 'Architecture', value: info.arch },
 			],
 		};
 	}

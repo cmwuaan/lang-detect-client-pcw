@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -36,8 +36,10 @@ const SHOW_TIMEOUT_MS = 5000;
 
 function createWindow(): void {
 	const win = new BrowserWindow({
-		width: 960,
-		height: 760,
+		// Đủ cho hai cột của .split (breakpoint 900px) cộng padding của shell.
+		// Hẹp hơn thì layout tự xếp dọc, không vỡ.
+		width: 1240,
+		height: 820,
 		minWidth: 640,
 		minHeight: 480,
 		show: false,
@@ -49,6 +51,41 @@ function createWindow(): void {
 			nodeIntegration: false,
 			sandbox: true,
 		},
+	});
+
+	/*
+	 * Link tài liệu (`target="_blank"`) phải mở ở TRÌNH DUYỆT của người dùng.
+	 * Không có handler này thì Electron tự mở một BrowserWindow mới — cửa sổ đó
+	 * không có thanh địa chỉ, không nút back, và vẫn nằm trong app.
+	 *
+	 * Chỉ mở http/https: `deny` mọi scheme khác để một URL dựng từ dữ liệu bên
+	 * ngoài không gọi được `file://` hay handler tuỳ biến của hệ điều hành.
+	 */
+	win.webContents.setWindowOpenHandler(function (details) {
+		const isWeb = /^https?:\/\//i.test(details.url);
+		if (isWeb) void shell.openExternal(details.url);
+		else diag('chặn mở URL ngoài http/https: ' + details.url);
+		return { action: 'deny' };
+	});
+
+	/*
+	 * Link không có target="_blank" sẽ điều hướng cả cửa sổ app đi mất. Chặn,
+	 * nhưng CHỈ khi khác origin: reload của dev server (cùng origin) phải đi qua
+	 * bình thường, không thì mất hot reload.
+	 */
+	win.webContents.on('will-navigate', function (event, url) {
+		const current = win.webContents.getURL();
+		let sameOrigin = true;
+		try {
+			sameOrigin = new URL(url).origin === new URL(current).origin;
+		} catch (err) {
+			sameOrigin = url === current;
+		}
+		if (sameOrigin) return;
+
+		event.preventDefault();
+		if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+		else diag('chặn điều hướng tới URL ngoài http/https: ' + url);
 	});
 
 	let shown = false;

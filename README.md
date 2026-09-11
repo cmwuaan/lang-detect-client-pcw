@@ -146,6 +146,17 @@ Toolchain, ràng buộc Windows 7 và cửa chặn build:
 [`nativelibs/zlang/BUILD.md`](nativelibs/zlang/BUILD.md). Module native trả về
 cái gì: [`nativelibs/zlang/README.md`](nativelibs/zlang/README.md).
 
+## Build lại detector cho bản web
+
+```bash
+npm run zdetect        # -> weblibs/zdetect/dist/
+npm run zdetect:test   # smoke test
+```
+
+Bản **web** dùng [`weblibs/zdetect`](weblibs/zdetect/README.md) — detector thuần
+JS của repo, không phải Web API của trình duyệt. App import **bản đã build ở
+`dist/`**, nên sửa source mà quên `npm run zdetect` thì app vẫn chạy bản cũ.
+
 ---
 
 # Bảng lệnh
@@ -164,3 +175,6 @@ cái gì: [`nativelibs/zlang/README.md`](nativelibs/zlang/README.md).
 | `npm run zlang`         | Build `.node` cho runtime hiện tại + facade TS |
 | `npm run zlang:node`    | Chỉ build `.node`                              |
 | `npm run zlang:types`   | Chỉ build `index.js` + `index.d.ts`            |
+| `npm run zdetect`       | Build bundle detector cho bản web (`weblibs/zdetect`) |
+| `npm run zdetect:test`  | Smoke test của zdetect (có assert)             |
+| `npm run zdetect:train` | Train lại profile n-gram từ corpus             |

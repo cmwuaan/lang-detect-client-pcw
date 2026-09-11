@@ -42,4 +42,6 @@ $font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 /// Độ mờ của lớp nền nhạt lấy từ accent (chip đang chọn…).
 $accent-wash-alpha: 0.14;
 
-$layout-max-width: 760px;
+/// Đủ cho hai cột ~560px. Rộng hơn nữa thì dòng hint trong option dài quá tầm
+/// mắt; hẹp hơn thì cột phải bóp khối JSON của log raw.
+$layout-max-width: 1180px;

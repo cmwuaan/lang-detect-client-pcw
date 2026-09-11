@@ -1,7 +1,13 @@
 import * as React from 'react';
 
 import { ActiveMethod } from './components/ActiveMethod';
-import { NativeOptions, NativeOptionText } from './components/NativeOptions';
+import { HypothesisMeter } from './components/HypothesisMeter';
+import {
+	DEFAULT_OPTION_TEXT,
+	isDefaultOptionText,
+	NativeOptions,
+	NativeOptionText,
+} from './components/NativeOptions';
 import { NativeRawLog } from './components/NativeRawLog';
 import { SampleChips } from './components/SampleChips';
 import { languageName } from './lib/languageName';
@@ -14,6 +20,7 @@ import {
 } from './lib/nativeOptionText';
 import { SAMPLES } from './lib/samples';
 import { useDebouncedValue } from './lib/useDebouncedValue';
+import { useConfidenceValues } from './lib/useConfidenceValues';
 import { useLanguageDetector } from './lib/useLanguageDetector';
 import { useNativeRaw } from './lib/useNativeRaw';
 import {
@@ -40,14 +47,7 @@ export function App(props: AppProps): JSX.Element {
 	const [info, setInfo] = React.useState<PlatformInfo | null>(null);
 	const [results, setResults] = React.useState<LanguageDetectionResult[] | null>(null);
 	// Tất cả rỗng = không truyền option nào; native để OS giữ mặc định của nó.
-	const [optionText, setOptionText] = React.useState<NativeOptionText>({
-		maxResults: '',
-		constraints: '',
-		hints: '',
-		inputLanguage: '',
-		inputScript: '',
-		startIndex: '',
-	});
+	const [optionText, setOptionText] = React.useState<NativeOptionText>(DEFAULT_OPTION_TEXT);
 
 	React.useEffect(
 		function () {
@@ -102,6 +102,20 @@ export function App(props: AppProps): JSX.Element {
 	// Log raw dùng cùng văn bản đã debounce và cùng option để hai phần không lệch nhau.
 	const raw = useNativeRaw(detectText, nativeOptions);
 
+	/*
+	 * Điểm gốc cho mọi ngôn ngữ. Hai nền tảng lấy từ hai đường khác nhau nhưng
+	 * CÙNG một hình dạng `{ detectedLanguage, confidence }`:
+	 *   desktop  zlang.detect() qua IPC — đã có sẵn trong `raw`
+	 *   web      zdetect.confidenceValues() — gọi thẳng, không qua IPC
+	 * Nhờ vậy HypothesisMeter không cần biết đang chạy nền tảng nào.
+	 */
+	const webConfidences = useConfidenceValues(provider, detectText);
+	const hypotheses = raw.hasBridge
+		? raw.detect.value
+			? raw.detect.value.hypotheses
+			: []
+		: webConfidences;
+
 	React.useEffect(
 		function () {
 			let alive = true;
@@ -131,14 +145,18 @@ export function App(props: AppProps): JSX.Element {
 	if (!detector) display = '—';
 	else if (isBusy) display = '…';
 	else if (!best) display = '—';
-	else if (isUndetermined) display = 'Không xác định';
+	else if (isUndetermined) display = 'Undetermined';
 	else display = languageName(best.detectedLanguage);
+
+	const confidenceText = best && !isUndetermined ? Math.round(best.confidence * 100) + '%' : null;
+	const dominant = raw.detect.value ? raw.detect.value.dominantLanguage : null;
 
 	return (
 		<main className="shell">
 			<header className="shell__header">
-				<div>
+				<div className="shell__title">
 					<h1>Lang Detect</h1>
+					<span className="shell__tagline">Language detection playground</span>
 				</div>
 				<div className="u-row">
 					<span className={'badge' + (platform.isDesktop ? ' badge--desktop' : '')}>
@@ -148,114 +166,150 @@ export function App(props: AppProps): JSX.Element {
 				</div>
 			</header>
 
-			<section className="card">
-				<div className="field">
-					<div className="field__header">
-						<label className="field__label" htmlFor="input-text">
-							Văn bản cần nhận diện
-						</label>
-						{/* Kết quả nằm ngay cạnh label. aria-live vì nó tự đổi khi gõ. */}
-						<span
-							className="field__result"
-							aria-live="polite"
-							aria-atomic="true"
-							aria-busy={isBusy}
-							title={
-								best && !isUndetermined
-									? 'Độ tin cậy ' + Math.round(best.confidence * 100) + '%'
-									: undefined
-							}
-						>
-							{display}
-						</span>
-					</div>
-					<textarea
-						id="input-text"
-						className="textarea"
-						value={text}
-						spellCheck={false}
-						placeholder="Dán hoặc gõ văn bản vào đây…"
-						onChange={function (event) {
-							setText(event.target.value);
-						}}
-					/>
-					<span className="field__hint">{text.length} ký tự</span>
+			{/*
+			 * Hai cột: TRÁI là mọi thứ điền vào, PHẢI là mọi thứ đọc ra. Ranh giới
+			 * đó giữ được kể cả khi thêm option mới — cứ thêm vào cột trái.
+			 * Màn hình hẹp thì _layout.scss xếp lại thành một cột, trái trước.
+			 */}
+			<div className="split">
+				<div className="split__col">
+					<section className="card">
+						<h2 className="card__title">Input</h2>
+						<div className="field">
+							<label className="field__label" htmlFor="input-text">
+								Text to detect
+							</label>
+							<textarea
+								id="input-text"
+								className="textarea"
+								value={text}
+								spellCheck={false}
+								placeholder="Paste or type text here…"
+								onChange={function (event) {
+									setText(event.target.value);
+								}}
+							/>
+							<span className="field__hint">{text.length} characters</span>
+						</div>
+						<SampleChips onPick={setText} supportedLanguages={provider.supportedLanguages} />
+					</section>
+
+					{raw.hasBridge ? (
+						<section className="card">
+							<div className="card__head">
+								<h2 className="card__title">Native options</h2>
+								{/* Tắt khi đã ở mặc định: nút bấm không làm gì là một lời nói dối nhỏ. */}
+								<button
+									type="button"
+									className="button button--ghost button--small"
+									disabled={isDefaultOptionText(optionText)}
+									onClick={function () {
+										setOptionText(DEFAULT_OPTION_TEXT);
+									}}
+								>
+									Reset to defaults
+								</button>
+							</div>
+							<p className="field__hint">
+								Passed straight through to the OS API. Leave a field empty to send nothing and keep
+								the OS default. Changing any value re-runs both the result and the raw log.
+							</p>
+							<NativeOptions
+								value={optionText}
+								onChange={setOptionText}
+								capabilities={raw.info.value ? raw.info.value.capabilities : null}
+							/>
+						</section>
+					) : null}
 				</div>
-				<SampleChips onPick={setText} />
-			</section>
 
-			<section className="card">
-				<ActiveMethod
-					isDesktop={platform.isDesktop}
-					backend={raw.info.value ? raw.info.value.backend : null}
-					scoreKind={raw.info.value ? raw.info.value.scoreKind : null}
-					availability={state.availability}
-				/>
+				<div className="split__col">
+					<section className="card">
+						<h2 className="card__title">Result</h2>
 
-				{/* Spec đòi transient activation: model chỉ được tải từ trong một
-				    sự kiện do người dùng kích hoạt, không tự tải lúc mount. */}
-				{state.needsUserGesture ? (
-					<div className="u-row">
-						<button type="button" className="button" onClick={state.requestCreate}>
-							Tải model ngôn ngữ
-						</button>
-						<span className="field__hint">
-							Trình duyệt yêu cầu thao tác của người dùng trước khi tải model.
-						</span>
-					</div>
-				) : null}
+						{/* aria-live vì nó tự đổi khi gõ, không có sự kiện nào báo. */}
+						<div className="hero" aria-live="polite" aria-atomic="true" aria-busy={isBusy}>
+							<span className={'hero__value' + (best && !isUndetermined ? '' : ' is-muted')}>
+								{display}
+							</span>
+							<span className="hero__meta">
+								{confidenceText ? <span className="hero__confidence">{confidenceText}</span> : null}
+								<span className="hero__note">
+									{dominant ? 'dominant ' + dominant : 'confidence'}
+								</span>
+							</span>
+						</div>
 
-				{state.progress !== null ? (
-					<span className="field__hint">Đang tải model… {Math.round(state.progress * 100)}%</span>
-				) : null}
+						<HypothesisMeter
+							hypotheses={hypotheses}
+							scoreKind={raw.info.value ? raw.info.value.scoreKind : null}
+						/>
 
-				{state.error ? <p className="field__hint">{state.error}</p> : null}
-			</section>
+						<ActiveMethod
+							isDesktop={platform.isDesktop}
+							backend={raw.info.value ? raw.info.value.backend : null}
+							scoreKind={raw.info.value ? raw.info.value.scoreKind : null}
+							availability={state.availability}
+							supportedLanguages={provider.supportedLanguages}
+						/>
 
-			{raw.hasBridge ? (
-				<section className="card">
-					<h2 className="card__title">Tuỳ chọn native</h2>
-					<p className="field__hint">
-						Truyền thẳng xuống <code>NLLanguageRecognizer</code>. Đổi giá trị là cả kết
-						quả ở trên lẫn log raw bên dưới chạy lại ngay.
-					</p>
-					<NativeOptions
-						value={optionText}
-						onChange={setOptionText}
-						capabilities={raw.info.value ? raw.info.value.capabilities : null}
-					/>
-				</section>
-			) : null}
+						{/* Spec đòi transient activation: model chỉ được tải từ trong một
+						    sự kiện do người dùng kích hoạt, không tự tải lúc mount. */}
+						{state.needsUserGesture ? (
+							<div className="u-row">
+								<button type="button" className="button" onClick={state.requestCreate}>
+									Download language model
+								</button>
+								<span className="field__hint">
+									The browser requires a user gesture before downloading a model.
+								</span>
+							</div>
+						) : null}
 
-			<section className="card">
-				<h2 className="card__title">Kết quả thô từ native</h2>
-				<p className="field__hint">
-					Nguyên trạng từ facade <code>nativelibs/zlang</code>, chưa qua adapter Web API
-					ở trên.
-				</p>
-				<NativeRawLog state={raw} />
-			</section>
+						{state.progress !== null ? (
+							<span className="field__hint">
+								Downloading model… {Math.round(state.progress * 100)}%
+							</span>
+						) : null}
 
-			<section className="card">
-				<h2 className="card__title">Môi trường thực thi</h2>
-				{info ? (
-					<dl className="kv">
-						{info.details.map(function (row) {
-							return (
-								<React.Fragment key={row.name}>
-									<dt>{row.name}</dt>
-									<dd>{row.value}</dd>
-								</React.Fragment>
-							);
-						})}
-					</dl>
-				) : (
-					<p className="field__hint">Đang đọc thông tin platform…</p>
-				)}
-			</section>
+						{state.error ? <p className="field__hint">{state.error}</p> : null}
+					</section>
+
+					<section className="card">
+						<h2 className="card__title">Raw native output</h2>
+						<p className="field__hint">
+							Exactly what the <code>nativelibs/zlang</code> facade returns, before the Web API
+							adapter above touches it.
+						</p>
+						<NativeRawLog state={raw} />
+					</section>
+
+					{/* Gập lại: tra một lần lúc gỡ lỗi, không cần chiếm chỗ thường trực. */}
+					<details className="group">
+						<summary className="group__summary">Runtime</summary>
+						{info ? (
+							<dl className="kv">
+								{info.details.map(function (row) {
+									return (
+										<React.Fragment key={row.name}>
+											<dt>{row.name}</dt>
+											<dd>{row.value}</dd>
+										</React.Fragment>
+									);
+								})}
+							</dl>
+						) : (
+							<p className="field__hint">Reading platform info…</p>
+						)}
+					</details>
+				</div>
+			</div>
 
 			<footer className="shell__footer">
-				Phương pháp do nền tảng quyết định · đang dùng <code>{provider.id}</code>
+				<span>
+					Engine chosen by platform · <code>{provider.id}</code>
+				</span>
+				<span>{isBusy ? 'detecting…' : 'idle'}</span>
 			</footer>
 		</main>
 	);

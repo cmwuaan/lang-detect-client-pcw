@@ -1,8 +1,8 @@
 import { container } from 'tsyringe';
 
 import { LanguageDetectorProvider } from './detection/LanguageDetector';
-import { BrowserDetectorProvider } from './detection/providers/BrowserDetectorProvider';
 import { NativeDetectorProvider } from './detection/providers/NativeDetectorProvider';
+import { ZDetectProvider } from './detection/providers/ZDetectProvider';
 import { DesktopPlatformService } from './platform/DesktopPlatformService';
 import { IPlatformService } from './platform/IPlatformService';
 import { WebPlatformService } from './platform/WebPlatformService';
@@ -15,21 +15,24 @@ import { TOKENS } from './tokens';
  *            NaturalLanguage; Windows: Extended Linguistic Services). Electron
  *            22 là Chromium 108, không có Web API LanguageDetector, nên native
  *            là thứ duy nhất thật sự chạy được.
- *   web      BrowserDetectorProvider — hạ tầng của trình duyệt. Bản web không
- *            có bridge sang native, nên cũng chỉ có một lựa chọn.
+ *   web      ZDetectProvider — bộ detector thuần JS của repo (weblibs/zdetect),
+ *            dùng BẢN ĐÃ BUILD ở dist/. Không chọn Web API LanguageDetector của
+ *            trình duyệt vì nó đòi Chromium >= 138 và hành vi khác nhau giữa các
+ *            máy; zdetect cho kết quả giống nhau ở mọi nơi, không cần tải model.
  *
  * Vì sao bỏ việc cho chọn: hai môi trường không có giao điểm nào dùng được, nên
  * cái "menu" cũ chỉ bày ra những lựa chọn mà bấm vào là hỏng. UI giờ chỉ *báo*
  * đang chạy bằng gì.
  *
- * Các provider còn lại (Hybrid/Trigram/Script) vẫn nằm trong repo nhưng KHÔNG
- * đăng ký — chúng là stub cho hướng đi sau, không phải lựa chọn của người dùng.
+ * Chỉ còn ĐÚNG HAI provider trong repo, mỗi nền tảng một cái. Các stub trước đây
+ * (Browser/Hybrid/Trigram/Script) đã xoá: chúng không được đăng ký, không được
+ * triển khai, và để lại chỉ khiến người đọc tưởng có lựa chọn.
  */
 export function configureContainer(): void {
 	const isDesktop = !!window.electronAPI;
 
 	container.register<LanguageDetectorProvider>(TOKENS.LanguageDetectorProvider, {
-		useToken: isDesktop ? NativeDetectorProvider : BrowserDetectorProvider,
+		useToken: isDesktop ? NativeDetectorProvider : ZDetectProvider,
 	});
 
 	container.register<IPlatformService>(TOKENS.PlatformService, {
