@@ -1,3 +1,17 @@
+/*
+ * `import type` — KHÔNG phải import thường. Kiểu bị xoá lúc biên dịch nên
+ * renderer bundle vẫn có 0 tham chiếu tới nativelibs; đổi thành import thường là
+ * esbuild sẽ kéo .node vào bundle và gãy.
+ *
+ * Lấy kiểu từ chính facade thay vì gõ lại: hợp đồng raw mà UI hiển thị phải là
+ * hợp đồng thật của nativelibs, lệch một field là log raw nói dối.
+ */
+import type {
+	ZLangDetectionAvailability,
+	ZLangDetectorHypothesis,
+	ZLangDetectorInfo,
+} from '../../nativelibs/zlang';
+
 export interface AppInfo {
 	appVersion: string;
 	electronVersion: string;
@@ -11,12 +25,28 @@ export interface AppInfo {
 	arch: string;
 }
 
-/** Một giả thuyết ngôn ngữ do native module trả về. */
-export interface NativeLanguageHypothesis {
-	/** Thẻ BCP 47: 'vi', 'en', 'zh-Hans'… */
-	detectedLanguage: string;
-	/** 0..1. Ý nghĩa tuỳ `scoreKind`. */
-	confidence: number;
+/**
+ * Một giả thuyết ngôn ngữ do native module trả về — nguyên trạng từ facade,
+ * main process không biến đổi gì.
+ *
+ * `confidence` là `null` khi backend không cho điểm (`scoreKind === 'rank'`:
+ * Windows/ELS chỉ xếp hạng). nativelibs không bịa số thay OS — thứ tự phần tử
+ * chính là thông tin hạng.
+ */
+export type NativeLanguageHypothesis = ZLangDetectorHypothesis;
+
+/**
+ * Kết quả THÔ của facade `nativelibs/zlang`, đúng như ba hàm của nó trả về.
+ *
+ * Khác `NativeDetectStatus` ở chỗ: status là bản đã gộp/diễn giải cho UI, còn
+ * đây là thứ chưa ai chạm vào — dùng cho phần log raw, để nhìn được chính xác
+ * native nói gì.
+ */
+export interface NativeRawSnapshot {
+	/** `zlang.info()` */
+	info: ZLangDetectorInfo;
+	/** `zlang.availability()` */
+	availability: ZLangDetectionAvailability;
 }
 
 /**
@@ -28,7 +58,7 @@ export interface NativeDetectStatus {
 	reason: string | null;
 	/** 'apple-nl' | 'windows-els' | 'none' */
 	backend: string;
-	/** 'probability' — xác suất của model; 'rank' — chỉ suy ra từ thứ hạng. */
+	/** 'probability' — xác suất của model; 'rank' — chỉ có thứ hạng, confidence là null. */
 	scoreKind: string;
 	version: string | null;
 }
@@ -37,6 +67,7 @@ export const IPC = {
 	getAppInfo: 'app:get-info',
 	nativeDetectStatus: 'native-detect:status',
 	nativeDetect: 'native-detect:detect',
+	nativeDetectRaw: 'native-detect:raw',
 };
 
 export interface ElectronAPI {
@@ -44,6 +75,9 @@ export interface ElectronAPI {
 	/** Nhận diện ngôn ngữ bằng model của hệ điều hành (nativelibs/zlang). */
 	nativeDetect: {
 		status(): Promise<NativeDetectStatus>;
-		detect(text: string, maxResults?: number): Promise<NativeLanguageHypothesis[]>;
+		/** Kết quả thô của `zlang.detect()` — chưa qua adapter Web API nào. */
+		detect(text: string): Promise<NativeLanguageHypothesis[]>;
+		/** `zlang.info()` + `zlang.availability()` nguyên trạng. Reject nếu không nạp được module. */
+		raw(): Promise<NativeRawSnapshot>;
 	};
 }

@@ -1,103 +1,123 @@
 "use strict";
-/* eslint-disable global-require */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.detect = exports.info = exports.availability = void 0;
-const DEFAULT_MAX_RESULTS = 3;
-/** Khớp ZLANG_MAX_RESULTS trong src/zlang_bridge.h. */
-const MAX_RESULTS = 16;
-const slice = process.platform + '-' + process.arch;
-let binding = null;
-let loadError = null;
-/*
- * require() với đường dẫn hằng, không ghép chuỗi: bundler (webpack của
- * zalo-pc-app, esbuild ở repo này) đọc được đường dẫn tĩnh, và grep tìm ra file
- * nào được nạp ở đâu.
+/**
+ * zlang — nhận diện ngôn ngữ dùng native có sẵn của hệ điều hành.
+ *
+ *   macOS   Apple NaturalLanguage (NLLanguageRecognizer) — xác suất của model.
+ *   Windows Extended Linguistic Services, "Microsoft Language Detection" —
+ *           chỉ có thứ hạng, KHÔNG có điểm.
+ *
+ * Tầng này chỉ làm interface + mapping: chọn prebuilt theo platform, đổi tên
+ * field thô của binding, và gate "có dùng được không". Không rule, không bảng
+ * tra, không regex — cái gì OS không cung cấp thì trả `null` chứ không suy ra.
  */
-switch (slice) {
-    case 'darwin-arm64':
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.info = exports.detect = exports.availability = void 0;
+var ZLangDetectorPlatformSupport;
+(function (ZLangDetectorPlatformSupport) {
+    // MacOS
+    ZLangDetectorPlatformSupport["DARWIN_ARM64"] = "darwin-arm64";
+    ZLangDetectorPlatformSupport["DARWIN_X64"] = "darwin-x64";
+    // Windows OS
+    ZLangDetectorPlatformSupport["WIN32_IA32"] = "win32-ia32";
+    ZLangDetectorPlatformSupport["WIN32_X64"] = "win32-x64";
+})(ZLangDetectorPlatformSupport || (ZLangDetectorPlatformSupport = {}));
+let nativeBinding = null;
+let loadError = null;
+const platform = `${process.platform}-${process.arch}`;
+function asError(value) {
+    return value instanceof Error ? value : new Error(String(value));
+}
+switch (platform) {
+    case ZLangDetectorPlatformSupport.DARWIN_ARM64:
         try {
-            binding = require('./darwin-arm64/zlang.darwin-arm64.node');
+            nativeBinding = require('./darwin-arm64/zlang.darwin-arm64.node');
         }
         catch (e) {
-            loadError = e;
+            loadError = asError(e);
         }
         break;
-    case 'darwin-x64':
+    case ZLangDetectorPlatformSupport.DARWIN_X64:
         try {
-            binding = require('./darwin-x64/zlang.darwin-x64.node');
+            nativeBinding = require('./darwin-x64/zlang.darwin-x64.node');
         }
         catch (e) {
-            loadError = e;
+            loadError = asError(e);
         }
         break;
-    case 'win32-ia32':
+    case ZLangDetectorPlatformSupport.WIN32_IA32:
         try {
-            binding = require('./win32-ia32/zlang.win32-ia32.node');
+            nativeBinding = require('./win32-ia32/zlang.win32-ia32.node');
         }
         catch (e) {
-            loadError = e;
+            loadError = asError(e);
         }
         break;
-    case 'win32-x64':
+    case ZLangDetectorPlatformSupport.WIN32_X64:
         try {
-            binding = require('./win32-x64/zlang.win32-x64.node');
+            nativeBinding = require('./win32-x64/zlang.win32-x64.node');
         }
         catch (e) {
-            loadError = e;
+            loadError = asError(e);
         }
         break;
     default:
-        loadError = new Error('zlang: không hỗ trợ ' + slice);
+        loadError = new Error(`zlang is not supported on this OS platform: ${platform}`);
+}
+function isPlatformSupported() {
+    return process.platform === 'darwin' || process.platform === 'win32';
 }
 /**
  * Backend Windows phải hỏi OS mới biết dịch vụ có bật không, nên cache lại:
- * availability() được gọi mỗi lần UI đổi provider.
+ * availability() có thể được gọi nhiều lần.
  */
-let cachedReason;
-function unavailableReason() {
-    if (cachedReason !== undefined)
-        return cachedReason;
-    cachedReason = (function () {
-        if (slice.indexOf('darwin') !== 0 && slice.indexOf('win32') !== 0) {
+let cachedUnavailableReason;
+function getUnavailableReason() {
+    if (cachedUnavailableReason !== undefined)
+        return cachedUnavailableReason;
+    cachedUnavailableReason = (function () {
+        if (!isPlatformSupported()) {
             return 'unsupported-platform';
         }
-        if (!binding)
+        if (!nativeBinding) {
             return 'native-binding-missing';
-        try {
-            return binding.available() ? null : 'os-service-unavailable';
         }
-        catch (e) {
+        try {
+            if (!nativeBinding.available()) {
+                return 'os-service-unavailable';
+            }
+            return null;
+        }
+        catch (_a) {
             return 'os-service-unavailable';
         }
     })();
-    return cachedReason;
+    return cachedUnavailableReason;
 }
-/** Có nhận diện được ngay bây giờ không. Không bao giờ ném. */
 function availability() {
-    const reason = unavailableReason();
+    const reason = getUnavailableReason();
     return reason ? { supported: false, reason: reason } : { supported: true };
 }
 exports.availability = availability;
-/** Thông tin chẩn đoán — hiện lên UI/log, không dùng cho luồng nghiệp vụ. */
+// Thông tin chẩn đoán
 function info() {
     let backend = 'none';
     let scoreKind = 'none';
     let version = null;
-    if (binding) {
+    if (nativeBinding) {
         try {
-            backend = binding.backend();
-            scoreKind = binding.scores();
-            version = binding.version();
+            backend = nativeBinding.backend();
+            scoreKind = nativeBinding.scores();
+            version = nativeBinding.version();
         }
-        catch (e) {
-            /* Binding nạp được nhưng gọi lỗi: giữ giá trị mặc định, báo qua loadError. */
+        catch (_a) {
+            // Nạp được nhưng gọi lỗi: giữ mặc định, lý do đã có ở loadError.
         }
     }
     return {
         backend: backend,
         scoreKind: scoreKind,
         version: version,
-        slice: slice,
+        platform: platform,
         loadError: loadError ? loadError.message : null,
     };
 }
@@ -105,23 +125,31 @@ exports.info = info;
 /**
  * Nhận diện ngôn ngữ của `text`.
  *
- * Trả về mảng đã sắp giảm dần theo confidence; mảng RỖNG khi văn bản quá ngắn
- * hoặc không kết luận được — đó là kết quả hợp lệ, không phải lỗi. Chỉ reject
- * khi backend không dùng được hoặc native báo lỗi thật.
+ * - Trả về mảng đã sắp giảm dần theo mức độ khả năng — kể cả khi `confidence`
+ * là null, thứ tự vẫn do OS quyết định và vẫn đúng.
+ * - Mảng rỗng khi văn bản quá ngắn hoặc không kết luận được — đó là kết quả
+ * hợp lệ, không phải lỗi.
+ * - Chỉ reject khi backend không dùng được hoặc native báo lỗi thật.
  */
-function detect(text, options) {
-    const reason = unavailableReason();
-    if (reason || !binding) {
-        return Promise.reject(new Error('zlang: không nhận diện được (' + (reason || 'unknown') + ')'));
+function detect(props) {
+    const { text } = props;
+    const reason = getUnavailableReason();
+    if (reason) {
+        return Promise.reject(new Error(`zlang: cannot detect (${reason})`));
     }
-    const requested = options && options.maxResults ? options.maxResults : DEFAULT_MAX_RESULTS;
-    const maxResults = Math.max(1, Math.min(MAX_RESULTS, Math.floor(requested)));
-    return binding.detect(text, maxResults).then(function (raw) {
-        const out = [];
+    // `reason` null nghĩa là binding chắc chắn đã nạp được: getUnavailableReason()
+    // trả 'native-binding-missing' cho mọi trường hợp `nativeBinding` là null.
+    // Khẳng định kiểu ở đây thay cho một lần kiểm tra không bao giờ đúng.
+    const binding = nativeBinding;
+    return binding.detect(text).then(function (raw) {
+        const results = [];
         for (let i = 0; i < raw.length; i++) {
-            out.push({ detectedLanguage: raw[i].tag, confidence: raw[i].confidence });
+            // `== null` bắt cả null lẫn undefined: napi có thể bỏ hẳn field khi
+            // phía Rust là None, tuỳ phiên bản. Chuẩn hoá về đúng một giá trị.
+            const confidence = raw[i].confidence == null ? null : raw[i].confidence;
+            results.push({ detectedLanguage: raw[i].tag, confidence: confidence });
         }
-        return out;
+        return results;
     });
 }
 exports.detect = detect;

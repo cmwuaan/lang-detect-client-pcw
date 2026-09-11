@@ -6,6 +6,7 @@ import {
 	IPC,
 	NativeDetectStatus,
 	NativeLanguageHypothesis,
+	NativeRawSnapshot,
 } from '@shared/ipc';
 
 const api: ElectronAPI = {
@@ -17,10 +18,11 @@ const api: ElectronAPI = {
 		status: function (): Promise<NativeDetectStatus> {
 			return ipcRenderer.invoke(IPC.nativeDetectStatus) as Promise<NativeDetectStatus>;
 		},
-		detect: function (text: string, maxResults?: number): Promise<NativeLanguageHypothesis[]> {
-			return ipcRenderer.invoke(IPC.nativeDetect, text, maxResults) as Promise<
-				NativeLanguageHypothesis[]
-			>;
+		detect: function (text: string): Promise<NativeLanguageHypothesis[]> {
+			return ipcRenderer.invoke(IPC.nativeDetect, text) as Promise<NativeLanguageHypothesis[]>;
+		},
+		raw: function (): Promise<NativeRawSnapshot> {
+			return ipcRenderer.invoke(IPC.nativeDetectRaw) as Promise<NativeRawSnapshot>;
 		},
 	},
 };

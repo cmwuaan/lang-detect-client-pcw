@@ -1,6 +1,6 @@
 import { singleton } from 'tsyringe';
 
-import { ElectronAPI, NativeDetectStatus } from '@shared/ipc';
+import { ElectronAPI, NativeDetectStatus, NativeLanguageHypothesis } from '@shared/ipc';
 
 import {
 	AvailabilityStatus,
@@ -10,9 +10,6 @@ import {
 	LanguageDetectorProvider,
 	UNDETERMINED_LANGUAGE,
 } from '../LanguageDetector';
-
-/** Số giả thuyết xin từ native; UI chỉ hiện cái đầu nhưng cần cả mảng để tính 'und'. */
-const MAX_RESULTS = 3;
 
 /**
  * Nhận diện bằng model có sẵn của HỆ ĐIỀU HÀNH, qua nativelibs/zlang:
@@ -102,7 +99,7 @@ export class NativeDetectorProvider implements LanguageDetectorProvider {
 
 			detect: function (input: string): Promise<LanguageDetectionResult[]> {
 				assertAlive();
-				return api.detect(input, MAX_RESULTS).then(withUndetermined);
+				return api.detect(input).then(toWebApiShape).then(withUndetermined);
 			},
 
 			measureInputUsage: function (input: string): Promise<number> {
@@ -117,6 +114,36 @@ export class NativeDetectorProvider implements LanguageDetectorProvider {
 			},
 		});
 	}
+}
+
+/**
+ * nativelibs trả `confidence: null` khi backend chỉ xếp hạng (Windows/ELS —
+ * `scoreKind === 'rank'`). Web API `LanguageDetectionResult` bắt buộc confidence
+ * là number, nên phép quy đổi nằm Ở ĐÂY, tầng adapter.
+ *
+ * VÌ SAO KHÔNG ĐỂ TRONG nativelibs: ELS không hề cung cấp con số này. nativelibs
+ * chỉ map những gì OS đưa ra, còn "hiển thị hạng thành mấy phần trăm" là quyết
+ * định của app — đổi cách hiển thị thì sửa ở đây, không phải build lại native.
+ *
+ * Cách quy đổi: nghịch đảo hạng rồi chuẩn hoá cho tổng bằng 1. Giữ đúng thứ tự
+ * OS đưa ra và không giả vờ là độ chắc chắn của model; UI phân biệt được nhờ
+ * `status.scoreKind`.
+ */
+function toWebApiShape(results: NativeLanguageHypothesis[]): LanguageDetectionResult[] {
+	let norm = 0;
+	for (let i = 0; i < results.length; i++) {
+		if (results[i].confidence === null) norm += 1 / (i + 1);
+	}
+
+	const out: LanguageDetectionResult[] = [];
+	for (let i = 0; i < results.length; i++) {
+		const given = results[i].confidence;
+		out.push({
+			detectedLanguage: results[i].detectedLanguage,
+			confidence: given === null ? (norm > 0 ? 1 / (i + 1) / norm : 0) : given,
+		});
+	}
+	return out;
 }
 
 /**

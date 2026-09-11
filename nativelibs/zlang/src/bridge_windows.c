@@ -7,9 +7,10 @@
  * asset nào đi kèm bản build — nên không có tiến trình host riêng như zocr.
  *
  * KHÁC BIỆT QUAN TRỌNG so với macOS: ELS chỉ trả về DANH SÁCH ĐÃ XẾP HẠNG, không
- * có xác suất. `confidence` ở đây được suy ra từ hạng (xem bên dưới), nên đừng
- * so sánh trực tiếp con số của hai nền tảng — facade công bố điều này qua
- * `scoreKind`.
+ * có xác suất. Bridge KHÔNG bịa ra con số thay cho nó: `confidence` được ghi là
+ * ZLANG_NO_CONFIDENCE và tầng trên dịch thành `null`. Thứ tự phần tử chính là
+ * thông tin duy nhất ELS cho, và nó được giữ nguyên. Facade công bố điều này qua
+ * `scoreKind === 'rank'`.
  *
  * LƯU Ý: file này chưa được biên dịch trên máy nào — máy phát triển hiện tại là
  * macOS. Layout struct lấy từ <elscore.h> của Windows SDK nên không có rủi ro
@@ -43,20 +44,6 @@ bool zlang_bridge_available(void) {
 
 const char *zlang_bridge_score_kind(void) {
     return "rank";
-}
-
-/*
- * ELS không cho điểm, chỉ cho thứ tự. Nghịch đảo hạng rồi chuẩn hoá cho tổng
- * bằng 1: giữ đúng thứ tự, không bịa ra độ chắc chắn của model, và UI vẫn có
- * một con số 0..1 để hiển thị.
- */
-static void assignRankConfidences(ZlangHypothesis *out, int32_t written) {
-    double norm = 0.0;
-    int32_t i;
-
-    for (i = 0; i < written; i++) norm += 1.0 / (double)(i + 1);
-    if (norm <= 0.0) return;
-    for (i = 0; i < written; i++) out[i].confidence = (1.0 / (double)(i + 1)) / norm;
 }
 
 int32_t zlang_bridge_detect(const char *utf8_text, uint32_t max_out, ZlangHypothesis *out) {
@@ -113,13 +100,13 @@ int32_t zlang_bridge_detect(const char *utf8_text, uint32_t max_out, ZlangHypoth
 
             if (bytes > 0) {
                 out[written].tag[bytes] = '\0';
-                out[written].confidence = 0.0; /* điền ở assignRankConfidences */
+                /* ELS không cho điểm — xem đầu file. */
+                out[written].confidence = ZLANG_NO_CONFIDENCE;
                 written++;
             }
             offset += tagChars + 1;
         }
 
-        assignRankConfidences(out, written);
         result = written;
     } else if (FAILED(hr)) {
         result = ZLANG_ERR_BACKEND;

@@ -12,10 +12,11 @@ import { TOKENS } from './services/tokens';
 
 configureContainer();
 
-const providers = container.resolveAll<LanguageDetectorProvider>(TOKENS.LanguageDetectorProvider);
+// resolve() chứ không resolveAll(): nền tảng quyết định provider, chỉ có một.
+const provider = container.resolve<LanguageDetectorProvider>(TOKENS.LanguageDetectorProvider);
 const platform = container.resolve<IPlatformService>(TOKENS.PlatformService);
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Không tìm thấy #root trong index.html');
 
-ReactDOM.render(<App providers={providers} platform={platform} />, rootEl);
+ReactDOM.render(<App provider={provider} platform={platform} />, rootEl);

@@ -21,8 +21,9 @@ mod backend;
 pub struct Hypothesis {
     /// Thẻ BCP 47: 'vi', 'en', 'zh-Hant'…
     pub tag: String,
-    /// 0..1, đã sắp giảm dần. Ý nghĩa tuỳ `scoreKind()`.
-    pub confidence: f64,
+    /// 0..1 khi backend cho điểm thật, `null` khi không (ELS chỉ xếp hạng).
+    /// Mảng luôn đã sắp giảm dần. Ý nghĩa con số: xem `scoreKind()`.
+    pub confidence: Option<f64>,
 }
 
 /// Chạy trên libuv threadpool, không chiếm luồng JS của main process.

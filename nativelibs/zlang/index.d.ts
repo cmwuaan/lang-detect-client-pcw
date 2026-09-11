@@ -1,54 +1,69 @@
 /**
- * zlang — facade nhận diện ngôn ngữ dùng model có sẵn của hệ điều hành.
+ * zlang — nhận diện ngôn ngữ dùng native có sẵn của hệ điều hành.
  *
  *   macOS   Apple NaturalLanguage (NLLanguageRecognizer) — xác suất của model.
  *   Windows Extended Linguistic Services, "Microsoft Language Detection" —
- *           chỉ có thứ hạng, confidence được suy ra từ hạng.
+ *           chỉ có thứ hạng, KHÔNG có điểm.
  *
- * Không tải model, không cần mạng, không asset nào đi kèm bản build, không
- * tiến trình phụ: mọi thứ nằm trong .node và trong OS.
- *
- * Tầng này giữ ba việc: chọn prebuilt đúng platform, dịch dữ liệu thô của
- * binding sang hình dạng công khai, và trả lời "có dùng được không" mà không ném
- * exception. Mọi logic nhận diện nằm ở native.
+ * Tầng này chỉ làm interface + mapping: chọn prebuilt theo platform, đổi tên
+ * field thô của binding, và gate "có dùng được không". Không rule, không bảng
+ * tra, không regex — cái gì OS không cung cấp thì trả `null` chứ không suy ra.
  */
-/** Ý nghĩa con số `confidence` — không so sánh chéo hai loại này với nhau. */
-export declare type ScoreKind = 'probability' | 'rank' | 'none' | 'unknown';
-export declare type ZlangUnavailableReason = 'unsupported-platform' | 'native-binding-missing' | 'os-service-unavailable';
-export interface LanguageHypothesis {
-    /** Thẻ BCP 47: 'vi', 'en', 'zh-Hans'… */
-    detectedLanguage: string;
-    /** 0..1. Xem `info().scoreKind` trước khi diễn giải. */
-    confidence: number;
-}
-export interface ZlangAvailability {
+export declare type ZLangDetectorScoreKind = 'probability' | 'rank' | 'none';
+export declare type ZLangDetectorUnavailableReason = 'unsupported-platform' | 'native-binding-missing' | 'os-service-unavailable';
+export interface ZLangDetectionAvailability {
     supported: boolean;
-    reason?: ZlangUnavailableReason;
+    reason?: ZLangDetectorUnavailableReason;
 }
-export interface ZlangInfo {
-    /** 'apple-nl' | 'windows-els' | 'none' */
+export interface ZLangDetectorHypothesis {
+    /**
+     * Thẻ BCP (Best Current Practice) 47: Là mã định danh ngôn ngữ chuẩn của IETF dùng để biểu diễn language tag.
+     * - vi - Tiếng Việt
+     * - en - Tiếng Anh
+     * - ko - Tiếng Hàn
+     * - zh - Tiếng Trung
+     * - zh-Hans - Tiếng Trung, chữ Giản thể
+     * - zh-Hant - Tiếng Trung, chữ Phồn thể
+     */
+    detectedLanguage: string;
+    /**
+     * 0..1 khi backend cho điểm thật, `null` khi backend không cho.
+     *
+     * `null` xảy ra với `scoreKind === 'rank'` (Windows/ELS): ELS chỉ trả về
+     * danh sách đã xếp hạng, không có điểm số nào. Tầng này KHÔNG suy ra một con
+     * số thay thế — thứ tự phần tử trong mảng chính là thông tin hạng. Bên dùng
+     * muốn hiển thị phần trăm thì tự quyết cách quy đổi.
+     *
+     * Đọc `info().scoreKind` trước khi diễn giải, và đừng so sánh chéo con số
+     * giữa hai nền tảng.
+     */
+    confidence: number | null;
+}
+export interface ZLangDetectorInfo {
+    /**
+     * Thông tin phần core chi tiết
+     * - 'apple-nl': Apple NaturalLanguage (NLLanguageRecognizer)
+     * - 'windows-els': Windows Extended Linguistic Services, "Microsoft Language Detection"
+     * - 'none'
+     **/
     backend: string;
-    scoreKind: ScoreKind;
-    /** Version của native binding; null khi không nạp được. */
+    scoreKind: ZLangDetectorScoreKind;
     version: string | null;
-    /** `${process.platform}-${process.arch}` */
-    slice: string;
-    /** Lý do require() thất bại, để log. null khi không có lỗi. */
+    platform: string;
     loadError: string | null;
 }
-export interface DetectOptions {
-    /** Số giả thuyết tối đa; chặn trong khoảng 1..16. Mặc định 3. */
-    maxResults?: number;
-}
-/** Có nhận diện được ngay bây giờ không. Không bao giờ ném. */
-export declare function availability(): ZlangAvailability;
-/** Thông tin chẩn đoán — hiện lên UI/log, không dùng cho luồng nghiệp vụ. */
-export declare function info(): ZlangInfo;
+declare function availability(): ZLangDetectionAvailability;
+declare function info(): ZLangDetectorInfo;
 /**
  * Nhận diện ngôn ngữ của `text`.
  *
- * Trả về mảng đã sắp giảm dần theo confidence; mảng RỖNG khi văn bản quá ngắn
- * hoặc không kết luận được — đó là kết quả hợp lệ, không phải lỗi. Chỉ reject
- * khi backend không dùng được hoặc native báo lỗi thật.
+ * - Trả về mảng đã sắp giảm dần theo mức độ khả năng — kể cả khi `confidence`
+ * là null, thứ tự vẫn do OS quyết định và vẫn đúng.
+ * - Mảng rỗng khi văn bản quá ngắn hoặc không kết luận được — đó là kết quả
+ * hợp lệ, không phải lỗi.
+ * - Chỉ reject khi backend không dùng được hoặc native báo lỗi thật.
  */
-export declare function detect(text: string, options?: DetectOptions): Promise<LanguageHypothesis[]>;
+declare function detect(props: {
+    text: string;
+}): Promise<ZLangDetectorHypothesis[]>;
+export { availability, detect, info };

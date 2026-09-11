@@ -4,9 +4,8 @@
  * Cửa chặn Windows 7: đọc bảng import của một file PE và từ chối artifact không
  * nạp được trên Win7.
  *
- * Dùng chung cho CẢ hai bản triển khai (Rust ở src/, C++ ở src-cpp/) vì nó chỉ
- * đọc binary — không quan tâm ngôn ngữ nào sinh ra. Cũng chạy được độc lập trên
- * bất kỳ .node nào khác:
+ * Cửa chặn chỉ đọc binary — không quan tâm toolchain nào sinh ra nó. Nhờ vậy
+ * chạy được độc lập trên bất kỳ .node/.dll nào khác:
  *
  *   node scripts/win7-guard.js <đường-dẫn.node> [...]
  *
@@ -72,9 +71,10 @@ function peImports(file) {
 }
 
 /**
- * Luật cấm. Hai luật đầu là của bản Rust: `std` từ 1.78 import tĩnh API chỉ có
- * trên Windows 8/10. Luật thứ ba là của bản C++: nếu quên đặt CRT link tĩnh thì
- * .node đòi bộ VC++ redistributable trên máy người dùng.
+ * Luật cấm. Hai luật đầu bắt lỗi toolchain: `std` của Rust từ 1.78 import tĩnh
+ * API chỉ có trên Windows 8/10. Hai luật sau bắt lỗi link: nếu `crt-static`
+ * trong .cargo/config.toml không ăn, .node sẽ đòi bộ VC++ redistributable trên
+ * máy người dùng.
  *
  * `dllPattern` khớp theo tiền tố, viết thường — tên DLL trong bảng import không
  * cố định hoa/thường, và VC++ runtime có nhiều biến thể số phiên bản.
@@ -98,7 +98,7 @@ const FORBIDDEN = [
 	{
 		dllPattern: 'msvcp',
 		fn: null,
-		why: 'thư viện chuẩn C++ chưa link tĩnh — .node sẽ đòi VC++ redistributable',
+		why: 'thư viện chuẩn chưa link tĩnh — .node sẽ đòi VC++ redistributable',
 	},
 ];
 

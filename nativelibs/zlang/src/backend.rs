@@ -15,7 +15,11 @@ pub const MAX_RESULTS: u32 = 16;
 const TAG_CAP: usize = 24;
 
 /// Một giả thuyết: (thẻ BCP 47, độ tin cậy 0..1).
-pub type Hypothesis = (String, f64);
+///
+/// `None` khi backend không cho điểm (ELS chỉ xếp hạng) — không thay bằng một
+/// con số suy ra, vì đó là dữ liệu OS không hề cung cấp. Thứ tự phần tử giữ
+/// nguyên thông tin hạng.
+pub type Hypothesis = (String, Option<f64>);
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod ffi {
@@ -29,10 +33,13 @@ mod ffi {
     }
 
     impl RawHypothesis {
-        pub fn zeroed() -> Self {
+        /// Slot chưa ghi. `confidence` là NaN (ZLANG_NO_CONFIDENCE trong
+        /// zlang_bridge.h), không phải 0.0: bridge quên điền thì kết quả là
+        /// "không có điểm" chứ không phải "điểm bằng 0".
+        pub fn unset() -> Self {
             RawHypothesis {
                 tag: [0; super::TAG_CAP],
-                confidence: 0.0,
+                confidence: f64::NAN,
             }
         }
     }
@@ -102,7 +109,7 @@ pub fn detect(text: &str, max_results: u32) -> Result<Vec<Hypothesis>> {
     let c_text = CString::new(text)
         .map_err(|_| Error::new(Status::InvalidArg, "zlang: text chứa byte NUL"))?;
 
-    let mut buffer = [ffi::RawHypothesis::zeroed(); MAX_RESULTS as usize];
+    let mut buffer = [ffi::RawHypothesis::unset(); MAX_RESULTS as usize];
     let written = unsafe {
         ffi::zlang_bridge_detect(c_text.as_ptr(), max_out, buffer.as_mut_ptr())
     };
@@ -124,7 +131,13 @@ pub fn detect(text: &str, max_results: u32) -> Result<Vec<Hypothesis>> {
         if tag.is_empty() {
             continue;
         }
-        out.push((tag, slot.confidence));
+        // NaN = ZLANG_NO_CONFIDENCE: backend không cho điểm.
+        let confidence = if slot.confidence.is_nan() {
+            None
+        } else {
+            Some(slot.confidence)
+        };
+        out.push((tag, confidence));
     }
     Ok(out)
 }

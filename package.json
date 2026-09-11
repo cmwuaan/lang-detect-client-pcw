@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"description": "Language detection app — chạy được cả bản web và bản desktop",
 	"engines": {
-		"node": ">=22.12"
+		"node": ">=14"
 	},
 	"main": "dist/main/main.js",
 	"scripts": {
@@ -18,9 +18,7 @@
 		"pack:win:only": "node scripts/pack-win.js",
 		"zlang": "npm-run-all zlang:node zlang:types",
 		"zlang:node": "node nativelibs/zlang/scripts/build-node.js",
-		"zlang:cpp": "node nativelibs/zlang/scripts/build-node.js --impl=cpp",
-		"zlang:types": "tsc -p nativelibs/zlang/tsconfig.json",
-		"zlang:smoke": "node nativelibs/zlang/scripts/smoke.js"
+		"zlang:types": "tsc -p nativelibs/zlang/tsconfig.json"
 	},
 	"keywords": [
 		"language detector"
@@ -42,8 +40,6 @@
 		"@types/react-dom": "17.0.9",
 		"electron": "22.3.9",
 		"esbuild": "0.25.10",
-		"node-addon-api": "7.1.1",
-		"node-gyp": "8.4.1",
 		"npm-run-all": "2.3.0",
 		"rimraf": "2.5.4",
 		"sass": "1.71.1",

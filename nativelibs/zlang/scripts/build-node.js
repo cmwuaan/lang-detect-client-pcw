@@ -3,21 +3,15 @@
 /**
  * Build .node cho một target rồi copy vào thư mục theo tên platform.
  *
- * HAI BẢN TRIỂN KHAI song song, dùng chung bridge và ABI ở src/:
+ * Lớp keo napi là Rust: src/lib.rs + src/backend.rs, dựng qua cargo, dùng bridge
+ * và ABI ở src/. Toolchain đã ghim trong rust-toolchain.toml — xem README về
+ * ràng buộc Windows 7. Xuất xứ của artifact nằm ở
+ * <thư-mục-nền-tảng>/build-info.json.
  *
- *   --impl=rust  (mặc định)  src/lib.rs + src/backend.rs   qua cargo
- *   --impl=cpp               src-cpp/addon.cc              qua node-gyp
+ *   node scripts/build-node.js                              # target của máy
+ *   node scripts/build-node.js i686-pc-windows-msvc         # ia32
  *
- * Cả hai xuất ra CÙNG một đường dẫn artifact, nên index.ts/index.js không biết
- * và không cần biết bản nào đang chạy. Đổi bản = build lại, không sửa code JS.
- * Bản nào đã dựng thì xem <thư-mục-nền-tảng>/build-info.json.
- *
- *   node scripts/build-node.js                              # rust, target của máy
- *   node scripts/build-node.js --impl=cpp                   # cpp, target của máy
- *   node scripts/build-node.js i686-pc-windows-msvc         # rust, ia32
- *   node scripts/build-node.js i686-pc-windows-msvc --impl=cpp
- *
- * Vì sao không dùng `napi build` của @napi-rs/cli cho bản Rust: việc nó làm thêm
+ * Vì sao không dùng `napi build` của @napi-rs/cli: việc nó làm thêm
  * ở đây chỉ là đổi tên artifact và sinh binding.d.ts. Kiểu dữ liệu công khai đã
  * do index.d.ts mô tả, nên script này thay thế được mà không thêm một dev
  * dependency (cùng chuỗi cung ứng) vào repo. Link flag cho napi do napi-build lo
@@ -55,26 +49,15 @@ function hostTarget() {
 
 function parseArgs() {
 	const args = process.argv.slice(2);
-	let impl = 'rust';
 	let target = null;
 
 	for (const arg of args) {
-		if (arg.indexOf('--impl=') === 0) {
-			impl = arg.slice('--impl='.length);
-			continue;
-		}
 		if (arg.indexOf('--') === 0) throw new Error('Cờ không hiểu: ' + arg);
 		target = arg;
 	}
 
-	if (impl !== 'rust' && impl !== 'cpp') {
-		throw new Error('--impl phải là rust hoặc cpp, nhận được: ' + impl);
-	}
-
-	return { impl: impl, target: target || hostTarget() };
+	return { target: target || hostTarget() };
 }
-
-// ------------------------------------------------------------------- rust
 
 /**
  * rust-toolchain.toml ghim 1.77.2 nhưng `profile = "minimal"` chỉ kéo std của
@@ -112,18 +95,9 @@ function buildRust(target) {
 }
 
 /** Phiên bản toolchain, ghi vào build-info.json để artifact không thành hộp đen. */
-function toolchainVersion(impl) {
+function toolchainVersion() {
 	try {
-		if (impl === 'rust') {
-			return execFileSync('rustc', ['--version'], { cwd: ROOT, encoding: 'utf8' }).trim();
-		}
-		const cc = process.platform === 'win32' ? 'cl' : 'clang';
-		const out = execFileSync(cc, ['--version'], {
-			cwd: ROOT,
-			encoding: 'utf8',
-			stdio: ['ignore', 'pipe', 'ignore'],
-		});
-		return out.split('\n')[0].trim();
+		return execFileSync('rustc', ['--version'], { cwd: ROOT, encoding: 'utf8' }).trim();
 	} catch (err) {
 		return 'unknown';
 	}
@@ -136,14 +110,13 @@ function toolchainVersion(impl) {
  * source lẫn thông tin toolchain là hộp đen — không ai trả lời được nó dựng bằng
  * gì, và hoá ra nó mang sẵn lỗi Windows 7 mà không ai biết.
  */
-function writeBuildInfo(destDir, impl, target) {
+function writeBuildInfo(destDir, target) {
 	fs.writeFileSync(
 		path.join(destDir, 'build-info.json'),
 		JSON.stringify(
 			{
-				impl: impl,
 				target: target,
-				toolchain: toolchainVersion(impl),
+				toolchain: toolchainVersion(),
 				builtOn: process.platform + '-' + process.arch,
 				builtAt: new Date().toISOString(),
 			},
@@ -154,7 +127,7 @@ function writeBuildInfo(destDir, impl, target) {
 }
 
 function main() {
-	const { impl, target } = parseArgs();
+	const { target } = parseArgs();
 	const outDir = TARGETS[target];
 	if (!outDir) {
 		throw new Error(
@@ -162,10 +135,9 @@ function main() {
 		);
 	}
 
-	console.log('[zlang] impl=' + impl + ' target=' + target);
+	console.log('[zlang] target=' + target);
 
-	const built =
-		impl === 'cpp' ? require('./build-cpp').build(outDir) : buildRust(target);
+	const built = buildRust(target);
 
 	// Node nạp addon theo đuôi .node; nội dung vẫn là dylib/dll bình thường.
 	const destDir = path.join(ROOT, outDir);
@@ -178,21 +150,17 @@ function main() {
 	if (outDir.indexOf('win32-') === 0) {
 		assertWin7Safe(
 			dest,
-			impl === 'rust'
-				? 'Gần như chắc chắn cargo đã dùng toolchain khác 1.77.2. Kiểm tra:\n' +
-						'  rustc -vV        (phải là 1.77.2)\n' +
-						'  cat rust-toolchain.toml\n' +
-						'Rust >= 1.78 không dựng được binary chạy trên Win7.'
-				: 'Kiểm tra binding.gyp: WINVER/_WIN32_WINNT phải là 0x0601 và\n' +
-						'RuntimeLibrary phải là 0 (/MT, CRT tĩnh). Nếu vẫn hỏng thì bản MSVC\n' +
-						'trên máy này đã bỏ khả năng target Windows 7 — xem giai đoạn spike.'
+			'Gần như chắc chắn cargo đã dùng toolchain khác 1.77.2. Kiểm tra:\n' +
+				'  rustc -vV        (phải là 1.77.2)\n' +
+				'  cat rust-toolchain.toml\n' +
+				'Rust >= 1.78 không dựng được binary chạy trên Win7.'
 		);
 	}
 
-	writeBuildInfo(destDir, impl, target);
+	writeBuildInfo(destDir, target);
 
 	const size = (fs.statSync(dest).size / 1024).toFixed(0);
-	console.log('[zlang] -> ' + path.relative(ROOT, dest) + ' (' + size + ' KB, ' + impl + ')');
+	console.log('[zlang] -> ' + path.relative(ROOT, dest) + ' (' + size + ' KB)');
 }
 
 main();

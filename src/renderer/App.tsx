@@ -1,11 +1,13 @@
 import * as React from 'react';
 
-import { MethodPicker } from './components/MethodPicker';
+import { ActiveMethod } from './components/ActiveMethod';
+import { NativeRawLog } from './components/NativeRawLog';
 import { SampleChips } from './components/SampleChips';
 import { languageName } from './lib/languageName';
 import { SAMPLES } from './lib/samples';
 import { useDebouncedValue } from './lib/useDebouncedValue';
 import { useLanguageDetector } from './lib/useLanguageDetector';
+import { useNativeRaw } from './lib/useNativeRaw';
 import {
 	LanguageDetectionResult,
 	LanguageDetectorProvider,
@@ -16,16 +18,16 @@ import { IPlatformService, PlatformInfo } from './services/platform/IPlatformSer
 const DETECT_DEBOUNCE_MS = 200;
 
 export interface AppProps {
-	providers: LanguageDetectorProvider[];
+	/** Đúng một provider, do nền tảng quyết định — xem services/container.ts. */
+	provider: LanguageDetectorProvider;
 	platform: IPlatformService;
 }
 
 export function App(props: AppProps): JSX.Element {
-	const providers = props.providers;
+	const provider = props.provider;
 	const platform = props.platform;
 
 	const [text, setText] = React.useState<string>(SAMPLES[0].text);
-	const [providerId, setProviderId] = React.useState<string>(providers[0].id);
 	const [info, setInfo] = React.useState<PlatformInfo | null>(null);
 	const [results, setResults] = React.useState<LanguageDetectionResult[] | null>(null);
 
@@ -42,21 +44,11 @@ export function App(props: AppProps): JSX.Element {
 		[platform]
 	);
 
-	const provider = React.useMemo(
-		function () {
-			const found = providers.filter(function (p) {
-				return p.id === providerId;
-			})[0];
-			return found || providers[0];
-		},
-		[providers, providerId]
-	);
-
 	// Hook lo vòng đời session: availability, transient activation, tiến độ tải.
 	const state = useLanguageDetector(provider);
 	const detector = state.detector;
 
-	// Đổi provider -> kết quả cũ không còn ý nghĩa.
+	// Session mới -> kết quả cũ không còn ý nghĩa.
 	React.useEffect(
 		function () {
 			setResults(null);
@@ -64,8 +56,10 @@ export function App(props: AppProps): JSX.Element {
 		[detector]
 	);
 
-	// Chỉ văn bản bị debounce; đổi provider thì chạy lại ngay.
 	const detectText = useDebouncedValue(text, DETECT_DEBOUNCE_MS);
+
+	// Log raw dùng cùng văn bản đã debounce để hai phần không lệch nhau.
+	const raw = useNativeRaw(detectText);
 
 	React.useEffect(
 		function () {
@@ -150,11 +144,11 @@ export function App(props: AppProps): JSX.Element {
 			</section>
 
 			<section className="card">
-				<MethodPicker
-					providers={providers}
-					activeId={provider.id}
+				<ActiveMethod
+					isDesktop={platform.isDesktop}
+					backend={raw.info.value ? raw.info.value.backend : null}
+					scoreKind={raw.info.value ? raw.info.value.scoreKind : null}
 					availability={state.availability}
-					onPick={setProviderId}
 				/>
 
 				{/* Spec đòi transient activation: model chỉ được tải từ trong một
@@ -178,6 +172,15 @@ export function App(props: AppProps): JSX.Element {
 			</section>
 
 			<section className="card">
+				<h2 className="card__title">Kết quả thô từ native</h2>
+				<p className="field__hint">
+					Nguyên trạng từ facade <code>nativelibs/zlang</code>, chưa qua adapter Web API
+					ở trên.
+				</p>
+				<NativeRawLog state={raw} />
+			</section>
+
+			<section className="card">
 				<h2 className="card__title">Môi trường thực thi</h2>
 				{info ? (
 					<dl className="kv">
@@ -196,7 +199,7 @@ export function App(props: AppProps): JSX.Element {
 			</section>
 
 			<footer className="shell__footer">
-				{providers.length} provider đăng ký trong container · đang dùng <code>{provider.id}</code>
+				Phương pháp do nền tảng quyết định · đang dùng <code>{provider.id}</code>
 			</footer>
 		</main>
 	);

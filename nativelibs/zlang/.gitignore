@@ -1,8 +1,2 @@
 # Artifact trung gian của cargo — .node đã build thì commit (xem README).
 target/
-
-# Artifact trung gian của node-gyp (bản C++, xem src-cpp/).
-build/
-# Static archive của bridge Swift. Nằm ngoài build/ vì `node-gyp rebuild` xoá
-# sạch build/ trước khi dựng lại.
-.build-cpp/

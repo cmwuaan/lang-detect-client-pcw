@@ -1,7 +1,12 @@
 import { IpcMain } from 'electron';
 import * as path from 'path';
 
-import { NativeDetectStatus, NativeLanguageHypothesis, IPC } from '@shared/ipc';
+import {
+	NativeDetectStatus,
+	NativeLanguageHypothesis,
+	NativeRawSnapshot,
+	IPC,
+} from '@shared/ipc';
 
 import type NativeLibs from '../../nativelibs';
 
@@ -77,12 +82,29 @@ function status(): NativeDetectStatus {
 	};
 }
 
-async function detect(text: string, maxResults?: number): Promise<NativeLanguageHypothesis[]> {
+async function detect(text: string): Promise<NativeLanguageHypothesis[]> {
 	const module = nativeModule();
 	if (!module) throw new Error('nativelibs/zlang không nạp được');
 
 	// zlang trả về đúng hình dạng { detectedLanguage, confidence } nên không cần map.
-	return module.detect(text, maxResults ? { maxResults: maxResults } : undefined);
+	return module.detect({ text: text });
+}
+
+/**
+ * Ba hàm của facade, trả về **nguyên trạng** — không gộp, không diễn giải.
+ *
+ * `status()` ở trên cố tình gộp `availability.reason` với `info.loadError` cho
+ * UI dễ đọc; hàm này thì không được làm vậy, vì nó tồn tại để nhìn thấy đúng thứ
+ * native nói. Ném lỗi khi module không nạp được: câu lỗi đó cũng là thông tin.
+ */
+function rawSnapshot(): NativeRawSnapshot {
+	const module = nativeModule();
+	if (!module) {
+		throw new Error(
+			'nativelibs/zlang không nạp được' + (loadError ? ': ' + loadError.message : '')
+		);
+	}
+	return { info: module.info(), availability: module.availability() };
 }
 
 export function registerNativeDetectHandlers(ipcMain: IpcMain): void {
@@ -90,11 +112,13 @@ export function registerNativeDetectHandlers(ipcMain: IpcMain): void {
 		return status();
 	});
 
-	ipcMain.handle(IPC.nativeDetect, function (
-		_event,
-		text: string,
-		maxResults?: number
-	): Promise<NativeLanguageHypothesis[]> {
-		return detect(text, maxResults);
+	ipcMain.handle(IPC.nativeDetect, function (_event, text: string): Promise<
+		NativeLanguageHypothesis[]
+	> {
+		return detect(text);
+	});
+
+	ipcMain.handle(IPC.nativeDetectRaw, function (): NativeRawSnapshot {
+		return rawSnapshot();
 	});
 }
