@@ -1,8 +1,6 @@
 # Lang Detect
 
-Nhận diện ngôn ngữ chạy được trên **web, macOS và Windows** từ một codebase, một
-renderer bundle. Repo này là lab để chốt kiến trúc trước khi đưa module native
-sang `zalo-pc-app`.
+Nhận diện ngôn ngữ chạy được trên **web, macOS và Windows**
 
 ```bash
 nvm use              # Node 14 theo .nvmrc
@@ -31,7 +29,7 @@ Chia làm hai mức, vì phần lớn người dùng repo chỉ cần mức A:
 
 Node 14 là để khớp `zalo-pc-app` — app đó build bằng Node 14. Toolchain còn lại
 cũng ghim theo app: Electron 22.3.9, TypeScript 3.9.6, React 16.14.0, sass
-1.71.1. **Đừng nâng cấp.**
+1.71.1.
 
 **Trên Apple Silicon, Node 14 chạy qua Rosetta** (`process.arch === 'x64'`), nên
 `node_modules` phải là bản x86_64 (`@esbuild/darwin-x64`). Binary Electron thì
@@ -128,6 +126,29 @@ nén, chạy `LangDetect.exe`. Đây là bản chạy thử, không phải insta
 thử trên Windows thật**: zlang gọi Extended Linguistic Services của OS nên chạy
 qua Wine không nói lên điều gì.
 
+## Đóng gói bản macOS để gửi người khác
+
+```bash
+npm run pack:mac                        # cả arm64 lẫn x64
+node scripts/pack-mac.js --arch=arm64   # chỉ Apple Silicon
+```
+
+Kết quả: `pc-dist/LangDetect-mac-<arch>.dmg` (91MB / 98MB). `arm64` cho Apple
+Silicon, `x64` cho Mac Intel — **gửi đúng file cho đúng máy**, không có bản
+universal. Script chỉ chạy trên macOS: `codesign`/`hdiutil`/`ditto` là công cụ
+của hệ điều hành.
+
+Bản này ký **ad-hoc, không notarize**, nên `spctl -a` trả `rejected` — đúng như
+thiết kế, không phải lỗi. Người nhận mở lần đầu sẽ bị Gatekeeper chặn và phải:
+
+1. Kéo `LangDetect.app` vào Applications
+2. Mở một lần → macOS báo chặn → bấm Done
+3. **System Settings → Privacy & Security → "Open Anyway"**
+4. Mở lại → Open
+
+Chuột phải → Open **không còn ăn** với app ad-hoc từ macOS 15 trở đi. Muốn bỏ
+hẳn bước này thì cần Developer ID + `xcrun notarytool` (99$/năm).
+
 ## Build lại native module (mức B)
 
 ```bash
@@ -161,20 +182,22 @@ JS của repo, không phải Web API của trình duyệt. App import **bản đ
 
 # Bảng lệnh
 
-| Lệnh                    | Việc                                           |
-| ----------------------- | ---------------------------------------------- |
-| `npm run dev`           | Dev server bản web, watch                      |
-| `npm run dev:pc`        | Dev server + Electron, watch                   |
-| `npm run build`         | Production build vào `dist/`                   |
-| `npm run build:only`    | Build production, không xoá `dist/` trước      |
-| `npm start`             | `build` rồi chạy Electron                      |
-| `npm run clean`         | Xoá `dist/`                                    |
-| `npm run typecheck`     | `tsc --noEmit`                                 |
-| `npm run pack:win`      | Đóng gói bản Windows chạy thử vào `pc-dist/`   |
-| `npm run pack:win:only` | Như trên, không build lại trước                |
-| `npm run zlang`         | Build `.node` cho runtime hiện tại + facade TS |
-| `npm run zlang:node`    | Chỉ build `.node`                              |
-| `npm run zlang:types`   | Chỉ build `index.js` + `index.d.ts`            |
+| Lệnh                    | Việc                                                  |
+| ----------------------- | ----------------------------------------------------- |
+| `npm run dev`           | Dev server bản web, watch                             |
+| `npm run dev:pc`        | Dev server + Electron, watch                          |
+| `npm run build`         | Production build vào `dist/`                          |
+| `npm run build:only`    | Build production, không xoá `dist/` trước             |
+| `npm start`             | `build` rồi chạy Electron                             |
+| `npm run clean`         | Xoá `dist/`                                           |
+| `npm run typecheck`     | `tsc --noEmit`                                        |
+| `npm run pack:win`      | Đóng gói bản Windows chạy thử vào `pc-dist/`          |
+| `npm run pack:win:only` | Như trên, không build lại trước                       |
+| `npm run pack:mac`      | Đóng gói `.dmg` macOS (arm64 + x64) vào `pc-dist/`    |
+| `npm run pack:mac:only` | Như trên, không build lại trước                       |
+| `npm run zlang`         | Build `.node` cho runtime hiện tại + facade TS        |
+| `npm run zlang:node`    | Chỉ build `.node`                                     |
+| `npm run zlang:types`   | Chỉ build `index.js` + `index.d.ts`                   |
 | `npm run zdetect`       | Build bundle detector cho bản web (`weblibs/zdetect`) |
-| `npm run zdetect:test`  | Smoke test của zdetect (có assert)             |
-| `npm run zdetect:train` | Train lại profile n-gram từ corpus             |
+| `npm run zdetect:test`  | Smoke test của zdetect (có assert)                    |
+| `npm run zdetect:train` | Train lại profile n-gram từ corpus                    |
