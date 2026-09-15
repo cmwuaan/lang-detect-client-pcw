@@ -1,0 +1,6 @@
+{
+	"target": "i686-pc-windows-msvc",
+	"toolchain": "rustc 1.77.2 (25ef9e3d8 2024-04-09)",
+	"builtOn": "win32-x64",
+	"builtAt": "2026-09-15T08:37:38.877Z"
+}
