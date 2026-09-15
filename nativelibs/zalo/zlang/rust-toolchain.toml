@@ -1,0 +1,4 @@
+[toolchain]
+# 1.77.2 là bản stable CUỐI còn dựng được binary chạy trên Win7 với target thường.
+channel = "1.77.2"
+profile = "minimal"

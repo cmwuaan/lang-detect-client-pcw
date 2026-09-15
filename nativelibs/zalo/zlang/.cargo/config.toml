@@ -1,0 +1,10 @@
+# NaturalLanguage.framework có từ 10.14.
+[env]
+MACOSX_DEPLOYMENT_TARGET = "10.14"
+
+# Link tĩnh C runtime để .node không đòi VC++ Redistributable trên máy người dùng.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
